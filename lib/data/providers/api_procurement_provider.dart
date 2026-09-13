@@ -26,6 +26,45 @@ class ApiProcurementProvider implements ProcurementDataProvider {
       };
 
   // Auth APIs
+  Future<Map<String, dynamic>> sendOtp(String mobileNumber) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/auth/otp/send'),
+        headers: _headers,
+        body: jsonEncode({'mobileNumber': mobileNumber}),
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        return {'success': true, 'data': body['data']};
+      } else {
+        final body = jsonDecode(res.body);
+        return {'success': false, 'error': body['error'] ?? 'Failed to send OTP'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOtp(String mobileNumber, String otp) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/auth/otp/verify'),
+        headers: _headers,
+        body: jsonEncode({'mobileNumber': mobileNumber, 'otp': otp}),
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        _authToken = body['token'];
+        return {'success': true, 'token': _authToken, 'user': body['user']};
+      } else {
+        final body = jsonDecode(res.body);
+        return {'success': false, 'error': body['error'] ?? 'OTP verification failed'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: $e'};
+    }
+  }
+
   Future<String?> loginFarmer(String mobileNumber) async {
     try {
       final res = await http.post(

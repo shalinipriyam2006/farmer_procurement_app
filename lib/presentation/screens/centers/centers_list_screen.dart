@@ -54,7 +54,7 @@ class _CentersListScreenState extends State<CentersListScreen> {
         var centers = repo.centers;
         final selectedId = repo.selectedCenterId;
 
-        if (_sortByNearest) {
+        if (_sortByNearest && !_userLocation.isFallback) {
           centers = LocationService.sortCentresByNearest(
             centers,
             userLat: _userLocation.latitude,
@@ -87,27 +87,33 @@ class _CentersListScreenState extends State<CentersListScreen> {
                       children: [
                         Expanded(
                           child: FilterChip(
-                            selected: _sortByNearest,
+                            selected: _sortByNearest && !_userLocation.isFallback,
                             avatar: Icon(
                               _userLocation.isFallback
                                   ? Icons.location_off_rounded
                                   : Icons.my_location_rounded,
                               size: 18,
-                              color: _sortByNearest ? Colors.white : AppColors.primary,
+                              color: (_sortByNearest && !_userLocation.isFallback) ? Colors.white : AppColors.primary,
                             ),
                             label: Text(
-                              isTamil ? 'அருகிலுள்ள மையங்கள் (GPS)' : 'Nearest Centres (Real GPS)',
+                              _userLocation.isFallback
+                                  ? (isTamil ? 'இருப்பிடம் பெறப்படவில்லை' : 'Location unavailable')
+                                  : (isTamil ? 'அருகிலுள்ள மையங்கள் (GPS)' : 'Nearest Centres (Real GPS)'),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: _sortByNearest ? Colors.white : AppColors.textPrimary,
+                                color: (_sortByNearest && !_userLocation.isFallback) ? Colors.white : AppColors.textPrimary,
                               ),
                             ),
                             selectedColor: AppColors.primary,
                             onSelected: (val) {
-                              setState(() {
-                                _sortByNearest = val;
-                              });
+                              if (_userLocation.isFallback) {
+                                _acquireGpsLocation();
+                              } else {
+                                setState(() {
+                                  _sortByNearest = val;
+                                });
+                              }
                             },
                           ),
                         ),
@@ -130,28 +136,42 @@ class _CentersListScreenState extends State<CentersListScreen> {
                       ],
                     ),
                     if (_userLocation.isFallback) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 14, color: Colors.orange.shade800),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _userLocation.errorMessage ?? (isTamil ? 'GPS அனுமதி கிடைக்கவில்லை. மாவட்ட இயல்புநிலை பயன்படுத்தப்படுகிறது.' : 'GPS unavailable. Using regional default coordinates.'),
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                          InkWell(
-                            onTap: _acquireGpsLocation,
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.location_off_rounded, size: 18, color: Colors.orange.shade900),
+                            const SizedBox(width: 8),
+                            Expanded(
                               child: Text(
-                                isTamil ? 'மீண்டும் பெற' : 'Retry GPS',
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                isTamil
+                                    ? 'இருப்பிடம் பெறப்படவில்லை. உங்கள் அருகிலுள்ள கொள்முதல் நிலையங்களை கண்டறிய GPS அனுமதியை இயக்கவும்.'
+                                    : 'Location unavailable. Enable location to find procurement centres near you.',
+                                style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            ElevatedButton(
+                              onPressed: _acquireGpsLocation,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                isTamil ? 'மீண்டும் முயற்சிக்க' : 'Retry GPS',
+                                style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -168,12 +188,11 @@ class _CentersListScreenState extends State<CentersListScreen> {
                           final center = centers[index];
                           final isSelected = center.id == selectedId;
                           final name = isTamil ? center.nameTa : center.nameEn;
-                          final dist = LocationService.calculateDistanceKm(
-                            _userLocation.latitude,
-                            _userLocation.longitude,
-                            center.latitude,
-                            center.longitude,
-                          );
+                          
+                          // Only compute and format distance if real GPS position is available
+                          final String distanceLabel = _userLocation.isFallback
+                              ? (isTamil ? 'இருப்பிடம் பெறப்படவில்லை' : 'Location unavailable')
+                              : '${LocationService.calculateDistanceKm(_userLocation.latitude, _userLocation.longitude, center.latitude, center.longitude).toStringAsFixed(1)} km';
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 16),
@@ -234,18 +253,18 @@ class _CentersListScreenState extends State<CentersListScreen> {
                                             const SizedBox(height: 4),
                                             Row(
                                               children: [
-                                                const Icon(
-                                                  Icons.near_me_rounded,
+                                                Icon(
+                                                  _userLocation.isFallback ? Icons.location_off_rounded : Icons.near_me_rounded,
                                                   size: 14,
-                                                  color: AppColors.secondary,
+                                                  color: _userLocation.isFallback ? AppColors.textTertiary : AppColors.secondary,
                                                 ),
                                                 const SizedBox(width: 4),
                                                 Text(
-                                                  '${dist.toStringAsFixed(1)} km • ${center.district} (${center.taluk})',
-                                                  style: const TextStyle(
+                                                  '$distanceLabel • ${center.district} (${center.taluk})',
+                                                  style: TextStyle(
                                                     fontSize: 12.5,
                                                     fontWeight: FontWeight.bold,
-                                                    color: AppColors.textSecondary,
+                                                    color: _userLocation.isFallback ? AppColors.textTertiary : AppColors.textSecondary,
                                                   ),
                                                 ),
                                               ],

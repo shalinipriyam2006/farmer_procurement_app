@@ -136,6 +136,20 @@ class ProcurementRepository extends ChangeNotifier {
   }
 
   // Auth Actions
+  Future<Map<String, dynamic>> sendOtp(String mobileNumber) async {
+    return await _apiProvider.sendOtp(mobileNumber);
+  }
+
+  Future<Map<String, dynamic>> verifyOtp(String mobileNumber, String otp) async {
+    final result = await _apiProvider.verifyOtp(mobileNumber, otp);
+    if (result['success'] == true) {
+      _isLoggedIn = true;
+      await syncWithBackend();
+      notifyListeners();
+    }
+    return result;
+  }
+
   Future<void> login(String mobile) async {
     _isLoggedIn = true;
     await _apiProvider.loginFarmer(mobile);

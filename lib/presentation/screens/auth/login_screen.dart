@@ -16,7 +16,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _mobileController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   bool _otpSent = false;
+  bool _isLoading = false;
   String? _errorMessage;
+  String? _infoMessage;
 
   @override
   void dispose() {
@@ -25,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _sendOtp() {
+  Future<void> _sendOtp() async {
     final text = _mobileController.text.trim();
     if (text.length < 10) {
       setState(() {
@@ -35,36 +37,80 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
+
     setState(() {
-      _otpSent = true;
+      _isLoading = true;
       _errorMessage = null;
-      _otpController.text = '1234'; // Pre-fill mock OTP for easy evaluation
+      _infoMessage = null;
+    });
+
+    final repo = ProcurementRepository();
+    final result = await repo.sendOtp(text);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+      if (result['success'] == true) {
+        _otpSent = true;
+        final data = result['data'];
+        if (data != null && data['isDevMode'] == true) {
+          _infoMessage = repo.isTamil
+              ? 'பரிசோதனை நிலை (Dev Mode): 123456 குறியீட்டை பயன்படுத்தவும்'
+              : 'Dev Mode active: OTP 123456 generated';
+          _otpController.text = '123456';
+        } else {
+          _infoMessage = repo.isTamil
+              ? 'SMS மூலம் OTP அனுப்பப்பட்டது'
+              : 'SMS OTP dispatched to your mobile number';
+        }
+      } else {
+        _errorMessage = result['error'] ?? 'Failed to send OTP';
+      }
     });
   }
 
-  void _verifyAndLogin() {
+  Future<void> _verifyAndLogin() async {
     final repo = ProcurementRepository();
     final otpText = _otpController.text.trim();
     if (otpText.length < 4) {
       setState(() {
         _errorMessage = repo.isTamil
-            ? 'சரியான 4 இலக்க OTP உள்ளிடவும்'
-            : 'Please enter a valid 4-digit OTP';
+            ? 'சரியான 6 இலக்க OTP உள்ளிடவும்'
+            : 'Please enter a valid OTP';
       });
       return;
     }
-    repo.login(_mobileController.text.trim());
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainNavScaffold()),
-    );
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await repo.verifyOtp(_mobileController.text.trim(), otpText);
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavScaffold()),
+      );
+    } else {
+      setState(() {
+        _errorMessage = result['error'] ?? 'OTP verification failed';
+      });
+    }
   }
 
-  void _useDemoAccount() {
+  Future<void> _useDemoAccount() async {
     final repo = ProcurementRepository();
     _mobileController.text = repo.currentFarmer.mobileNumber;
-    _sendOtp();
-    _verifyAndLogin();
+    await _sendOtp();
+    _otpController.text = '123456';
+    await _verifyAndLogin();
   }
 
   @override
@@ -233,6 +279,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             counterText: '',
                           ),
                         ),
+                        if (_infoMessage != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _infoMessage!,
+                              style: const TextStyle(
+                                color: AppColors.primaryDark,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 10),
                           Text(
@@ -245,7 +309,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                         const SizedBox(height: 18),
-                        if (!_otpSent)
+                        if (_isLoading)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        else if (!_otpSent)
                           ElevatedButton.icon(
                             onPressed: _sendOtp,
                             icon: const Icon(Icons.send_rounded),
@@ -264,15 +335,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _otpController,
                             keyboardType: TextInputType.number,
-                            maxLength: 4,
+                            maxLength: 6,
                             style: const TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 10,
+                              letterSpacing: 8,
                             ),
                             textAlign: TextAlign.center,
                             decoration: const InputDecoration(
-                              hintText: '1 2 3 4',
+                              hintText: '1 2 3 4 5 6',
                               counterText: '',
                             ),
                           ),
