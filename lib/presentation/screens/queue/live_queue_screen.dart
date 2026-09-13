@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:farmer_procurement_app/core/constants/app_colors.dart';
 import 'package:farmer_procurement_app/core/localization/app_translations.dart';
 import 'package:farmer_procurement_app/core/services/voice_assistant_service.dart';
+import 'package:farmer_procurement_app/core/services/notification_service.dart';
 import 'package:farmer_procurement_app/data/procurement_repository.dart';
 
 class LiveQueueScreen extends StatefulWidget {
@@ -14,8 +16,40 @@ class LiveQueueScreen extends StatefulWidget {
 class _LiveQueueScreenState extends State<LiveQueueScreen> {
   final TextEditingController _queryController = TextEditingController();
   bool _isListening = false;
+  Timer? _liveRefreshTimer;
 
-  void _processVoiceQuery(ProcurementRepository repo, String inputQuery) {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize notification service and start live queue polling
+    NotificationService.initialize();
+    NotificationService.requestNotificationPermission();
+
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      final repo = ProcurementRepository();
+      repo.refreshQueueFromBackend().then((_) {
+        if (mounted) {
+          final queue = repo.getQueueState();
+          NotificationService.evaluateAndNotifyQueueState(
+            context: context,
+            tokenNumber: queue.userToken,
+            farmersAhead: queue.farmersAhead,
+            isTamil: repo.isTamil,
+            isTurn: queue.farmersAhead == 0,
+          );
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _liveRefreshTimer?.cancel();
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  void _processVoiceQuery(ProcurementRepository repo, String inputQuery) async {
     if (inputQuery.trim().isEmpty) return;
 
     final response = VoiceAssistantService.processLiveQueueVoiceQuery(
@@ -30,7 +64,12 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
       _isListening = false;
     });
 
-    _showVoiceResponseDialog(context, repo, inputQuery, response);
+    final spokenText = repo.isTamil ? response.textTa : response.textEn;
+    final ttsResult = await VoiceAssistantService.speak(spokenText, isTamil: repo.isTamil);
+
+    if (mounted) {
+      _showVoiceResponseDialog(context, repo, inputQuery, response, ttsResult);
+    }
   }
 
   void _showVoiceResponseDialog(
@@ -38,6 +77,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
     ProcurementRepository repo,
     String userQuery,
     VoiceQueryResponse response,
+    TtsPlaybackResult ttsResult,
   ) {
     final isTamil = repo.isTamil;
 
@@ -63,7 +103,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: AppColors.primaryContainer,
                       shape: BoxShape.circle,
                     ),
@@ -75,7 +115,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isTamil ? 'குரல் உதவி பதில்' : 'Live Tracking Voice Assistant',
+                          isTamil ? 'குரல் உதவி பதில் (Audio Speaking)' : 'Live Tracking Voice Assistant (TTS Active)',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         Text(
@@ -86,7 +126,10 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      VoiceAssistantService.stop();
+                      Navigator.pop(context);
+                    },
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ],
@@ -97,37 +140,85 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
                 ),
-                child: Row(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.volume_up_rounded, color: AppColors.primary, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        isTamil ? response.textTa : response.textEn,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                          height: 1.4,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.volume_up_rounded, color: AppColors.primary, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            isTamil ? response.textTa : response.textEn,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (ttsResult.warningMessage != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                ttsResult.warningMessage!,
+                                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.check_rounded),
-                label: Text(isTamil ? 'சரி' : 'Got it'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        VoiceAssistantService.speak(
+                          isTamil ? response.textTa : response.textEn,
+                          isTamil: isTamil,
+                        );
+                      },
+                      icon: const Icon(Icons.replay_rounded),
+                      label: Text(isTamil ? 'மீண்டும் பேசு' : 'Replay Voice'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        VoiceAssistantService.stop();
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.check_rounded),
+                      label: Text(isTamil ? 'சரி' : 'Got it'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -177,7 +268,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.secondaryContainer,
                           shape: BoxShape.circle,
                         ),
@@ -189,11 +280,11 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isTamil ? 'குரல் மூலம் கேளுங்கள் (Live Queue Voice)' : 'Voice Assistance (Live Queue)',
+                              isTamil ? 'குரல் உதவி (TTS Enabled)' : 'Voice Assistance (Live TTS)',
                               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              isTamil ? 'தமிழ் மற்றும் ஆங்கிலம் ஆதரிக்கப்படுகிறது' : 'Supports Tamil & English queries',
+                              isTamil ? 'தமிழ் மற்றும் ஆங்கில குரல் ஆதரவு' : 'Supports Tamil & English audio speech',
                               style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                             ),
                           ],
@@ -201,15 +292,45 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // Mic Simulation Button
+                  // TEST VOICE BUTTON
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final result = await VoiceAssistantService.testVoice(isTamil: isTamil);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              result.warningMessage ??
+                                  (isTamil ? 'குரல் ஒலித்தல் தொடங்கப்பட்டது' : 'TTS Audio playback initiated'),
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.volume_up_rounded, color: Colors.white),
+                    label: Text(
+                      isTamil ? '🔊 குரல் சோதனை (Test Voice)' : '🔊 Test Voice Audio',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Mic Button Action
                   Center(
                     child: GestureDetector(
                       onTap: () {
                         setModalState(() => _isListening = true);
                         final nav = Navigator.of(context);
-                        Future.delayed(const Duration(milliseconds: 1500), () {
+                        Future.delayed(const Duration(milliseconds: 1200), () {
                           if (!mounted) return;
                           setModalState(() => _isListening = false);
                           nav.pop();
@@ -228,7 +349,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: (_isListening ? AppColors.error : AppColors.secondary).withValues(alpha: 0.4),
+                              color: (_isListening ? AppColors.error : AppColors.secondary).withOpacity(0.4),
                               blurRadius: 18,
                               spreadRadius: 4,
                             ),
@@ -251,7 +372,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 10),
 
@@ -283,7 +404,6 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                   }),
 
                   const SizedBox(height: 10),
-                  // Text input fallback
                   TextField(
                     controller: _queryController,
                     decoration: InputDecoration(
@@ -340,6 +460,37 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Network Error / Offline Status Bar
+                if (repo.isOffline) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade800),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.wifi_off_rounded, color: Colors.amber, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isTamil
+                                ? 'இணைப்பு இல்லை. கடைசியாக புதுப்பிக்கப்பட்டது: ${repo.lastSyncTime != null ? "${repo.lastSyncTime!.hour}:${repo.lastSyncTime!.minute}" : "ஆஃப்லைன்"}'
+                                : 'Connection unavailable. Showing last known queue state (${repo.lastSyncTime != null ? "${repo.lastSyncTime!.hour}:${repo.lastSyncTime!.minute}" : "Offline"})',
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.black87),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => repo.refreshQueueFromBackend(),
+                          child: Text(isTamil ? 'மீண்டும் முயல்' : 'Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 // Real-Time Queue Control Panel
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -353,14 +504,14 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                       Row(
                         children: [
                           const Icon(
-                            Icons.sync_rounded,
+                            Icons.cloud_done_rounded,
                             color: AppColors.primaryDark,
                             size: 22,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              isTamil ? 'நேரலை வரிசை இயக்கம்' : 'Real-Time Live Queue Sync Engine',
+                              isTamil ? 'நேரலை HTTPS கொண்ட கொள்முதல் இயக்கம்' : 'Live Render HTTPS Backend Sync Engine',
                               style: const TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.bold,
@@ -368,9 +519,14 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                               ),
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryDark, size: 20),
+                            onPressed: () => repo.refreshQueueFromBackend(),
+                            tooltip: 'Refresh Queue',
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
                           Expanded(
@@ -383,9 +539,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                                 size: 18,
                               ),
                               label: Text(
-                                isTamil
-                                    ? 'அடுத்த டோக்கனை அழை'
-                                    : 'Call Next Token',
+                                isTamil ? 'அடுத்த டோக்கனை அழை' : 'Call Next Token',
                                 style: const TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.bold,
@@ -420,9 +574,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                               label: Text(
                                 isAutoSimulating
                                     ? (isTamil ? 'நிறுத்து' : 'Pause Auto')
-                                    : (isTamil
-                                          ? 'தானியங்கி இயக்கம்'
-                                          : 'Auto Ticker'),
+                                    : (isTamil ? 'தானியங்கி இயக்கம்' : 'Auto Ticker'),
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.bold,
@@ -459,9 +611,9 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryContainer.withValues(alpha: 0.5),
+                      color: AppColors.primaryContainer.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
                     ),
                     child: Row(
                       children: [
@@ -510,7 +662,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.secondary.withValues(alpha: 0.4),
+                          color: AppColors.secondary.withOpacity(0.4),
                           blurRadius: 14,
                           offset: const Offset(0, 5),
                         ),
@@ -564,7 +716,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha: 0.15),
+                      color: AppColors.warning.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: AppColors.warning, width: 1.8),
                     ),
@@ -603,7 +755,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     borderRadius: BorderRadius.circular(26),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: AppColors.primary.withOpacity(0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 8),
                       ),
@@ -617,10 +769,10 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
+                            color: Colors.white.withOpacity(0.3),
                           ),
                         ),
                         child: Row(
@@ -661,7 +813,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                       Text(
                         '${isTamil ? "கொள்முதல் கூடம்" : "Weighing Scale Bay"} #02',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: Colors.white.withOpacity(0.9),
                           fontSize: 14.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -681,7 +833,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     border: Border.all(color: AppColors.divider),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: Colors.black.withOpacity(0.04),
                         blurRadius: 10,
                       ),
                     ],
@@ -800,7 +952,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     Widget trailingWidget;
 
                     if (item.isServing) {
-                      bgColor = AppColors.primaryContainer.withValues(alpha: 0.6);
+                      bgColor = AppColors.primaryContainer.withOpacity(0.6);
                       borderSide = const BorderSide(
                         color: AppColors.primary,
                         width: 2,
@@ -824,8 +976,8 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                         ),
                       );
                     } else if (item.isUser) {
-                      bgColor = AppColors.secondaryContainer.withValues(
-                        alpha: 0.5,
+                      bgColor = AppColors.secondaryContainer.withOpacity(
+                        0.5,
                       );
                       borderSide = const BorderSide(
                         color: AppColors.secondary,
@@ -850,7 +1002,7 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                         ),
                       );
                     } else if (item.isPast) {
-                      bgColor = AppColors.surfaceVariant.withValues(alpha: 0.5);
+                      bgColor = AppColors.surfaceVariant.withOpacity(0.5);
                       borderSide = BorderSide(color: Colors.grey.shade300);
                       trailingWidget = const Icon(
                         Icons.check_circle_rounded,

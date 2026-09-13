@@ -14,6 +14,33 @@ class CentersListScreen extends StatefulWidget {
 class _CentersListScreenState extends State<CentersListScreen> {
   bool _isMapView = false;
   bool _sortByNearest = false;
+  bool _isLoadingGps = true;
+  UserLocationResult _userLocation = const UserLocationResult(
+    latitude: LocationService.defaultLat,
+    longitude: LocationService.defaultLon,
+    status: LocationStatus.granted,
+    isFallback: true,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _acquireGpsLocation();
+  }
+
+  Future<void> _acquireGpsLocation() async {
+    setState(() => _isLoadingGps = true);
+    final location = await LocationService.getCurrentDeviceLocation();
+    if (mounted) {
+      setState(() {
+        _userLocation = location;
+        _isLoadingGps = false;
+        if (!location.isFallback) {
+          _sortByNearest = true; // Auto-sort by nearest when real GPS is detected
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +55,11 @@ class _CentersListScreenState extends State<CentersListScreen> {
         final selectedId = repo.selectedCenterId;
 
         if (_sortByNearest) {
-          centers = LocationService.sortCentresByNearest(centers);
+          centers = LocationService.sortCentresByNearest(
+            centers,
+            userLat: _userLocation.latitude,
+            userLon: _userLocation.longitude,
+          );
         }
 
         return Scaffold(
@@ -46,50 +77,83 @@ class _CentersListScreenState extends State<CentersListScreen> {
           ),
           body: Column(
             children: [
-              // GPS & Filter Control Header
+              // GPS Status & Filter Control Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 color: AppColors.surfaceVariant,
-                child: Row(
+                child: Column(
                   children: [
-                    FilterChip(
-                      selected: _sortByNearest,
-                      avatar: Icon(
-                        Icons.my_location_rounded,
-                        size: 18,
-                        color: _sortByNearest ? Colors.white : AppColors.primary,
-                      ),
-                      label: Text(
-                        isTamil ? 'அருகிலுள்ள மையங்கள்' : 'Nearest Centres (GPS)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: _sortByNearest ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-                      selectedColor: AppColors.primary,
-                      onSelected: (val) {
-                        setState(() {
-                          _sortByNearest = val;
-                        });
-                        if (val) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                isTamil
-                                    ? 'GPS தூரம் அடிப்படையில் வரிசைப்படுத்தப்பட்டது'
-                                    : 'Centres sorted by nearest GPS location',
-                              ),
-                              backgroundColor: AppColors.primaryDark,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilterChip(
+                            selected: _sortByNearest,
+                            avatar: Icon(
+                              _userLocation.isFallback
+                                  ? Icons.location_off_rounded
+                                  : Icons.my_location_rounded,
+                              size: 18,
+                              color: _sortByNearest ? Colors.white : AppColors.primary,
                             ),
-                          );
-                        }
-                      },
+                            label: Text(
+                              isTamil ? 'அருகிலுள்ள மையங்கள் (GPS)' : 'Nearest Centres (Real GPS)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: _sortByNearest ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            selectedColor: AppColors.primary,
+                            onSelected: (val) {
+                              setState(() {
+                                _sortByNearest = val;
+                              });
+                            },
+                          ),
+                        ),
+                        if (_isLoadingGps)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.refresh_rounded, size: 20),
+                            onPressed: _acquireGpsLocation,
+                            tooltip: 'Refresh GPS',
+                          ),
+                        Text(
+                          '${centers.length} ${isTamil ? "நிலையங்கள்" : "centres"}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                    Text(
-                      '${centers.length} ${isTamil ? "நிலையங்கள்" : "centres"}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                    ),
+                    if (_userLocation.isFallback) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 14, color: Colors.orange.shade800),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _userLocation.errorMessage ?? (isTamil ? 'GPS அனுமதி கிடைக்கவில்லை. மாவட்ட இயல்புநிலை பயன்படுத்தப்படுகிறது.' : 'GPS unavailable. Using regional default coordinates.'),
+                              style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _acquireGpsLocation,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Text(
+                                isTamil ? 'மீண்டும் பெற' : 'Retry GPS',
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -105,8 +169,8 @@ class _CentersListScreenState extends State<CentersListScreen> {
                           final isSelected = center.id == selectedId;
                           final name = isTamil ? center.nameTa : center.nameEn;
                           final dist = LocationService.calculateDistanceKm(
-                            10.7867,
-                            79.1378,
+                            _userLocation.latitude,
+                            _userLocation.longitude,
                             center.latitude,
                             center.longitude,
                           );
@@ -123,8 +187,8 @@ class _CentersListScreenState extends State<CentersListScreen> {
                               boxShadow: [
                                 BoxShadow(
                                   color: isSelected
-                                      ? AppColors.primary.withValues(alpha: 0.12)
-                                      : Colors.black.withValues(alpha: 0.04),
+                                      ? AppColors.primary.withOpacity(0.12)
+                                      : Colors.black.withOpacity(0.04),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),

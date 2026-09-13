@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:farmer_procurement_app/core/models/queue_model.dart';
 import 'package:farmer_procurement_app/core/models/token_model.dart';
 import 'package:farmer_procurement_app/core/models/procurement_center.dart';
@@ -14,7 +16,112 @@ class VoiceQueryResponse {
   });
 }
 
+class TtsPlaybackResult {
+  final bool isSuccess;
+  final String spokenText;
+  final String? warningMessage;
+
+  const TtsPlaybackResult({
+    required this.isSuccess,
+    required this.spokenText,
+    this.warningMessage,
+  });
+}
+
 class VoiceAssistantService {
+  static final FlutterTts _flutterTts = FlutterTts();
+  static bool _isInitialized = false;
+
+  /// Initialize TTS engine settings
+  static Future<void> _initTts() async {
+    if (_isInitialized) return;
+    try {
+      await _flutterTts.setSpeechRate(0.5);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        await _flutterTts.setQueueMode(1); // 1 = REPLACE
+      }
+
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('[VoiceAssistantService] TTS init error: $e');
+    }
+  }
+
+  /// Stop any ongoing speech
+  static Future<void> stop() async {
+    try {
+      await _flutterTts.stop();
+    } catch (_) {}
+  }
+
+  /// Speak text dynamically in English or Tamil with fallback handling
+  static Future<TtsPlaybackResult> speak(String text, {required bool isTamil}) async {
+    await _initTts();
+    await stop();
+
+    final targetLang = isTamil ? 'ta-IN' : 'en-US';
+
+    try {
+      // Check if target language is available on device
+      bool isAvailable = false;
+      try {
+        final check = await _flutterTts.isLanguageAvailable(targetLang);
+        isAvailable = (check == true || check == 1);
+      } catch (_) {
+        isAvailable = true; // Assume available if check not supported on web
+      }
+
+      if (isTamil && !isAvailable) {
+        // Graceful Fallback: Fallback to English speech if Tamil TTS engine is absent on device
+        await _flutterTts.setLanguage('en-US');
+        await _flutterTts.speak('Tamil voice synthesis engine is not installed on this device. $text');
+        return TtsPlaybackResult(
+          isSuccess: true,
+          spokenText: text,
+          warningMessage: 'Tamil voice engine is missing on this device. Spoke in fallback mode.',
+        );
+      }
+
+      await _flutterTts.setLanguage(targetLang);
+      final result = await _flutterTts.speak(text);
+
+      if (result == 1 || result == true) {
+        return TtsPlaybackResult(isSuccess: true, spokenText: text);
+      } else {
+        return TtsPlaybackResult(
+          isSuccess: false,
+          spokenText: text,
+          warningMessage: 'TTS engine returned failure.',
+        );
+      }
+    } catch (e) {
+      debugPrint('[VoiceAssistantService] Speak error: $e');
+      return TtsPlaybackResult(
+        isSuccess: false,
+        spokenText: text,
+        warningMessage: 'Voice synthesis error: $e',
+      );
+    }
+  }
+
+  /// Test Voice feature button action
+  static Future<TtsPlaybackResult> testVoice({required bool isTamil}) {
+    if (isTamil) {
+      return speak(
+        'உங்கள் டோக்கன் TK-104. உங்களுக்கு முன்னால் 3 விவசாயிகள் உள்ளனர்.',
+        isTamil: true,
+      );
+    } else {
+      return speak(
+        'Your token is TK-104. There are 3 farmers ahead of you.',
+        isTamil: false,
+      );
+    }
+  }
+
   static VoiceQueryResponse processLiveQueueVoiceQuery({
     required String query,
     required QueueStateModel queueState,

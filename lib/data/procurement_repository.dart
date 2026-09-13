@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:farmer_procurement_app/core/config/app_config.dart';
 import 'package:farmer_procurement_app/core/localization/app_translations.dart';
@@ -31,6 +32,11 @@ class ProcurementRepository extends ChangeNotifier {
   bool _isAutoSimulatingQueue = false;
   Timer? _queueSimulationTimer;
 
+  // Network & Sync State
+  bool _isOffline = false;
+  DateTime? _lastSyncTime;
+  String? _syncError;
+
   late FarmerProfile _currentFarmer;
   late List<ProcurementCenter> _centers;
   late String _selectedCenterId;
@@ -48,17 +54,47 @@ class ProcurementRepository extends ChangeNotifier {
     _notifications = List.from(MockData.initialNotifications);
 
     // Initial sync attempt with API provider
-    _syncWithBackend();
+    syncWithBackend();
   }
 
-  Future<void> _syncWithBackend() async {
+  Future<void> syncWithBackend() async {
     try {
       final fetchedCentres = await _apiProvider.getCentres();
       if (fetchedCentres.isNotEmpty) {
         _centers = fetchedCentres;
+        _isOffline = false;
+        _lastSyncTime = DateTime.now();
+        _syncError = null;
         notifyListeners();
       }
-    } catch (_) {}
+      await refreshQueueFromBackend();
+    } catch (e) {
+      _isOffline = true;
+      _syncError = 'Unable to connect to live backend ($e)';
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshQueueFromBackend() async {
+    try {
+      final queueState = await _apiProvider.getQueueState(
+        _currentFarmer.id,
+        _selectedCenterId,
+      );
+      final currentServingNum =
+          int.tryParse(queueState.currentServingToken.replaceAll(RegExp(r'[^0-9]'), '')) ??
+              _currentServingTokenNumber;
+
+      _currentServingTokenNumber = currentServingNum;
+      _isOffline = false;
+      _lastSyncTime = DateTime.now();
+      _syncError = null;
+      notifyListeners();
+    } catch (e) {
+      _isOffline = true;
+      _syncError = 'Backend unavailable: $e';
+      notifyListeners();
+    }
   }
 
   // Getters
@@ -67,6 +103,9 @@ class ProcurementRepository extends ChangeNotifier {
   bool get isLoggedIn => _isLoggedIn;
   bool get isOfficerMode => _isOfficerMode;
   bool get isAutoSimulatingQueue => _isAutoSimulatingQueue;
+  bool get isOffline => _isOffline;
+  DateTime? get lastSyncTime => _lastSyncTime;
+  String? get syncError => _syncError;
   FarmerProfile get currentFarmer => _currentFarmer;
   List<ProcurementCenter> get centers => _centers;
   String get selectedCenterId => _selectedCenterId;
@@ -100,6 +139,7 @@ class ProcurementRepository extends ChangeNotifier {
   Future<void> login(String mobile) async {
     _isLoggedIn = true;
     await _apiProvider.loginFarmer(mobile);
+    await syncWithBackend();
     notifyListeners();
   }
 
@@ -131,6 +171,7 @@ class ProcurementRepository extends ChangeNotifier {
     );
     _selectedCenterId = preferredCentreId;
     _isLoggedIn = true;
+    syncWithBackend();
     notifyListeners();
   }
 
@@ -141,6 +182,7 @@ class ProcurementRepository extends ChangeNotifier {
 
   void setSelectedCenter(String centerId) {
     _selectedCenterId = centerId;
+    syncWithBackend();
     notifyListeners();
   }
 
@@ -206,7 +248,6 @@ class ProcurementRepository extends ChangeNotifier {
       color: const Color(0xFF1B5E20),
     );
 
-    // Send to backend API
     try {
       await _apiProvider.bookToken(
         farmerId: _currentFarmer.id,
@@ -276,7 +317,7 @@ class ProcurementRepository extends ChangeNotifier {
       estimatedWaitMinutes: estWaitMinutes,
       queueStatusEn: statusEn,
       queueStatusTa: statusTa,
-      totalServedToday: _currentServingTokenNumber - 80,
+      totalServedToday: math.max(0, _currentServingTokenNumber - 80),
       queueSequence: sequence,
     );
   }
@@ -447,7 +488,6 @@ class ProcurementRepository extends ChangeNotifier {
       );
     }
 
-    // Call backend API
     try {
       await _apiProvider.officerNextQueueToken();
     } catch (_) {}
@@ -499,7 +539,6 @@ class ProcurementRepository extends ChangeNotifier {
       _payment = _payment.copyWith(status: PaymentStatus.processing);
     }
 
-    // Call backend API
     try {
       await _apiProvider.officerUpdateStage(stageIndex: targetIdx, remark: remark);
     } catch (_) {}
