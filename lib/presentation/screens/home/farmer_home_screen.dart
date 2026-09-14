@@ -180,6 +180,31 @@ class FarmerHomeScreen extends StatelessWidget {
                           color: AppColors.textPrimary,
                         ),
                       ),
+                      if (center.status == 'CLOSED') ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  center.statusReason != null && center.statusReason!.isNotEmpty
+                                      ? (isTamil ? 'நிலையம் மூடப்பட்டுள்ளது: ${center.statusReason}' : 'CENTRE CLOSED: ${center.statusReason}')
+                                      : (isTamil ? 'இந்த கொள்முதல் நிலையம் தற்போது மூடப்பட்டுள்ளது' : 'Procurement Centre Currently Closed'),
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(

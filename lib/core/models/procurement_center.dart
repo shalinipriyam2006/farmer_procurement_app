@@ -10,6 +10,7 @@ class ProcurementCenter {
   final String workingHours;
   final String contactPhone;
   final String status; // OPEN, BUSY, CLOSED, TEMPORARILY_UNAVAILABLE
+  final String? statusReason;
   final int dailyCapacityBags;
   final int activeTokensCount;
   final int currentServingToken;
@@ -27,6 +28,7 @@ class ProcurementCenter {
     required this.workingHours,
     required this.contactPhone,
     this.status = 'OPEN',
+    this.statusReason,
     required this.dailyCapacityBags,
     required this.activeTokensCount,
     required this.currentServingToken,
@@ -46,9 +48,10 @@ class ProcurementCenter {
       workingHours: json['workingHours'] ?? '',
       contactPhone: json['contactPhone'] ?? '',
       status: json['status'] ?? 'OPEN',
+      statusReason: json['statusReason'],
       dailyCapacityBags: json['dailyCapacityBags'] ?? 1000,
       activeTokensCount: json['activeTokensCount'] ?? 0,
-      currentServingToken: json['currentServingToken'] ?? 101,
+      currentServingToken: json['currentServingToken'] ?? json['currentServingTokenNum'] ?? 101,
       avgWaitMinutes: (json['avgWaitMinutes'] as num?)?.toDouble() ?? 12.0,
     );
   }
@@ -65,6 +68,7 @@ class ProcurementCenter {
         'workingHours': workingHours,
         'contactPhone': contactPhone,
         'status': status,
+        'statusReason': statusReason,
         'dailyCapacityBags': dailyCapacityBags,
         'activeTokensCount': activeTokensCount,
         'currentServingToken': currentServingToken,

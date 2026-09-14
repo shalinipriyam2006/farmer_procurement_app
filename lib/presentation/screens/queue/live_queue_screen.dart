@@ -442,7 +442,6 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
         final queue = repo.getQueueState();
         final isUserServing = (queue.currentServingToken == queue.userToken);
         final isNext = (queue.farmersAhead == 1);
-        final isAutoSimulating = repo.isAutoSimulatingQueue;
 
         return Scaffold(
           floatingActionButton: FloatingActionButton.extended(
@@ -491,7 +490,60 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                   ),
                 ],
 
-                // Real-Time Queue Control Panel
+                if (repo.currentCenter.status == 'CLOSED') ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.red.shade400, width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.cancel_rounded, color: Colors.red.shade800, size: 24),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isTamil ? 'கொள்முதல் நிலையம் மூடப்பட்டுள்ளது (CENTRE CLOSED)' : 'PROCUREMENT CENTRE CURRENTLY CLOSED',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.red.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (repo.currentCenter.statusReason != null && repo.currentCenter.statusReason!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            isTamil
+                                ? 'காரணம்: ${repo.currentCenter.statusReason}'
+                                : 'Reason: ${repo.currentCenter.statusReason}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade800,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Text(
+                          isTamil
+                              ? 'அதிகாரிகள் மீண்டும் திறக்கும் வரை புதிய டோக்கன் மற்றும் வரிசை நகர்வு இடைநிறுத்தப்பட்டுள்ளது.'
+                              : 'Queue updates and token processing are suspended until administrative reopening.',
+                          style: const TextStyle(fontSize: 12, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Real-Time Queue Sync Status Panel
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -499,105 +551,28 @@ class _LiveQueueScreenState extends State<LiveQueueScreen> {
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.primary, width: 1.5),
                   ),
-                  child: Column(
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.cloud_done_rounded,
-                            color: AppColors.primaryDark,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              isTamil ? 'நேரலை HTTPS கொண்ட கொள்முதல் இயக்கம்' : 'Live Render HTTPS Backend Sync Engine',
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryDark, size: 20),
-                            onPressed: () => repo.refreshQueueFromBackend(),
-                            tooltip: 'Refresh Queue',
-                          ),
-                        ],
+                      const Icon(
+                        Icons.cloud_done_rounded,
+                        color: AppColors.primaryDark,
+                        size: 22,
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                repo.officerNextQueueToken();
-                              },
-                              icon: const Icon(
-                                Icons.fast_forward_rounded,
-                                size: 18,
-                              ),
-                              label: Text(
-                                isTamil ? 'அடுத்த டோக்கனை அழை' : 'Call Next Token',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.secondary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 10,
-                                ),
-                                minimumSize: Size.zero,
-                              ),
-                            ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isTamil ? 'நேரலை HTTPS கொண்ட கொள்முதல் இயக்கம்' : 'Live Render HTTPS Backend Sync Engine',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryDark,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                repo.toggleAutoQueueSimulation();
-                              },
-                              icon: Icon(
-                                isAutoSimulating
-                                    ? Icons.pause_circle_filled
-                                    : Icons.play_circle_fill,
-                                size: 18,
-                                color: isAutoSimulating
-                                    ? AppColors.error
-                                    : AppColors.primary,
-                              ),
-                              label: Text(
-                                isAutoSimulating
-                                    ? (isTamil ? 'நிறுத்து' : 'Pause Auto')
-                                    : (isTamil ? 'தானியங்கி இயக்கம்' : 'Auto Ticker'),
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: isAutoSimulating
-                                      ? AppColors.error
-                                      : AppColors.primary,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: isAutoSimulating
-                                      ? AppColors.error
-                                      : AppColors.primary,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 10,
-                                ),
-                                minimumSize: Size.zero,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryDark, size: 20),
+                        onPressed: () => repo.refreshQueueFromBackend(),
+                        tooltip: 'Refresh Queue',
                       ),
                     ],
                   ),

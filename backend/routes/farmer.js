@@ -18,13 +18,22 @@ router.get('/:id/token', async (req, res) => {
 router.post('/token/book', async (req, res) => {
   const { farmerId, centreId, bookingDate, timeSlot, cropNameEn, cropNameTa, estimatedQuintals, estimatedBags } = req.body;
   const centre = await db.getCentreById(centreId || 'CENTRE-01');
+  
+  if (centre.status === 'CLOSED') {
+    return res.status(400).json({
+      success: false,
+      error: `Token booking is unavailable. ${centre.nameEn} is currently closed. ${centre.statusReason || ''}`.trim()
+    });
+  }
+
+  const farmer = await db.getFarmerById(farmerId || 'FARMER-001');
   const newTokenNum = `TK-${centre.currentServingTokenNum + 5}`;
   
   const newToken = {
     id: `TOKEN-${Date.now()}`,
     tokenNumber: newTokenNum,
-    farmerId: farmerId || 'FARMER-001',
-    farmerName: 'Murugan Ramanathan',
+    farmerId: farmer.id,
+    farmerName: farmer.name || 'Raja Ramanathan',
     centreId: centre.id,
     centreNameEn: centre.nameEn,
     centreNameTa: centre.nameTa,

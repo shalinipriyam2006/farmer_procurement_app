@@ -267,11 +267,12 @@ class ApiProcurementProvider implements ProcurementDataProvider {
   }
 
   // Officer Backend APIs
-  Future<String?> officerNextQueueToken() async {
+  Future<String?> officerNextQueueToken({String? centreId}) async {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/officer/queue/call-next'),
         headers: _headers,
+        body: jsonEncode({'centreId': centreId}),
       );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -294,12 +295,16 @@ class ApiProcurementProvider implements ProcurementDataProvider {
     }
   }
 
-  Future<bool> officerSetCentreStatus(String status) async {
+  Future<bool> officerSetCentreStatus(String status, {String? reason, String? centreId}) async {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/officer/centre/status'),
         headers: _headers,
-        body: jsonEncode({'status': status}),
+        body: jsonEncode({
+          'status': status,
+          'reason': reason,
+          'centreId': centreId,
+        }),
       );
       return res.statusCode == 200;
     } catch (_) {

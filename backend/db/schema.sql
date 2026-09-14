@@ -21,11 +21,14 @@ CREATE TABLE IF NOT EXISTS procurement_centres (
     working_hours VARCHAR(100) DEFAULT '08:30 AM - 05:30 PM',
     contact_phone VARCHAR(20) NOT NULL,
     status VARCHAR(30) DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'PAUSED', 'CLOSED', 'TEMPORARILY_UNAVAILABLE')),
+    status_reason TEXT DEFAULT NULL,
     daily_capacity_bags INTEGER DEFAULT 1200,
     active_tokens_count INTEGER DEFAULT 0,
     current_serving_token_num INTEGER DEFAULT 101,
     avg_wait_minutes DOUBLE PRECISION DEFAULT 12.0
 );
+
+ALTER TABLE procurement_centres ADD COLUMN IF NOT EXISTS status_reason TEXT;
 
 -- 3. Farmers Table
 CREATE TABLE IF NOT EXISTS farmers (

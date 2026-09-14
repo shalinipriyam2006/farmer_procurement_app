@@ -43,6 +43,9 @@ class _CentersListScreenState extends State<CentersListScreen> {
   }
 
   double _calculateScore(ProcurementCenter c) {
+    if (c.status.toUpperCase() == 'CLOSED') {
+      return -1000.0;
+    }
     final dist = LocationService.calculateDistanceKm(
       _userLocation.latitude,
       _userLocation.longitude,

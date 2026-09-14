@@ -426,17 +426,37 @@ class Database {
     return centreMem;
   }
 
-  async updateCentreStatus(centreId, status) {
+  async updateCentreStatus(centreId, status, statusReason = null) {
     let centreMem = this.centres.find(c => c.id === centreId) || this.centres[0];
     centreMem.status = status;
+    centreMem.statusReason = statusReason;
 
     if (dbPool.isDbConnected) {
       try {
-        await dbPool.query('UPDATE procurement_centres SET status = $1 WHERE id = $2', [status, centreId]);
+        await dbPool.query(
+          'UPDATE procurement_centres SET status = $1, status_reason = $2 WHERE id = $3',
+          [status, statusReason, centreId]
+        );
       } catch (err) {
         console.error('[Database Layer] Error updating status:', err.message);
       }
     }
+
+    if (status === 'CLOSED') {
+      const reasonMsg = statusReason ? ` Reason: ${statusReason}` : '';
+      const reasonMsgTa = statusReason ? ` காரணம்: ${statusReason}` : '';
+      await this.createNotification({
+        id: `NOTIF-${Date.now()}`,
+        farmerId: 'FARMER-001',
+        titleEn: 'Your Procurement Centre is Currently Closed',
+        titleTa: 'உங்கள் கொள்முதல் மையம் தற்போது மூடப்பட்டுள்ளது',
+        messageEn: `${centreMem.nameEn} has been marked CLOSED by administrative officers.${reasonMsg}`,
+        messageTa: `${centreMem.nameTa} அதிகாரிகளால் மூடப்பட்டது என குறிப்பிடப்பட்டுள்ளது.${reasonMsgTa}`,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+      });
+    }
+
     return status;
   }
 
@@ -513,7 +533,24 @@ class Database {
 
     const userTokenNum = parseInt(token.tokenNumber.replace(/\D/g, '')) || 104;
     const farmersAhead = Math.max(0, userTokenNum - centre.currentServingTokenNum);
-    const estWaitMinutes = farmersAhead * 12;
+    const avgWait = centre.avgWaitMinutes || 12.0;
+    const estWaitMinutes = Math.round(farmersAhead * avgWait);
+
+    let statusEn = farmersAhead === 0
+      ? 'YOUR TURN NOW! Proceed to Bay #02'
+      : `Moving Smoothly (~${Math.round(avgWait)} mins/farmer)`;
+    let statusTa = farmersAhead === 0
+      ? 'உங்கள் முறை வந்துவிட்டது!'
+      : `சீரான வேகம் (~${Math.round(avgWait)} நிமிடம்/விவசாயி)`;
+
+    if (centre.status === 'CLOSED') {
+      statusEn = centre.statusReason
+        ? `CENTRE CLOSED: ${centre.statusReason}`
+        : 'Procurement Centre Currently Closed';
+      statusTa = centre.statusReason
+        ? `நிலையம் மூடப்பட்டுள்ளது: ${centre.statusReason}`
+        : 'கொள்முதல் நிலையம் தற்போது மூடப்பட்டுள்ளது';
+    }
 
     let sequence = [];
     for (let i = centre.currentServingTokenNum - 2; i <= centre.currentServingTokenNum + 5; i++) {
@@ -535,8 +572,10 @@ class Database {
       farmersAhead,
       estimatedWaitMinutes: estWaitMinutes,
       totalServedToday: Math.max(0, centre.currentServingTokenNum - 80),
-      queueStatusEn: farmersAhead === 0 ? 'YOUR TURN NOW! Proceed to Bay #02' : 'Moving Smoothly (~12 mins/farmer)',
-      queueStatusTa: farmersAhead === 0 ? 'உங்கள் முறை வந்துவிட்டது!' : 'சீரான வேகம் (~12 நிமிடம்/விவசாயி)',
+      centreStatus: centre.status,
+      statusReason: centre.statusReason || null,
+      queueStatusEn: statusEn,
+      queueStatusTa: statusTa,
       queueSequence: sequence,
     };
   }
@@ -713,6 +752,7 @@ class Database {
       workingHours: r.working_hours,
       contactPhone: r.contact_phone,
       status: r.status,
+      statusReason: r.status_reason || null,
       dailyCapacityBags: r.daily_capacity_bags,
       activeTokensCount: r.active_tokens_count,
       currentServingTokenNum: r.current_serving_token_num,

@@ -312,19 +312,29 @@ class ProcurementRepository extends ChangeNotifier {
 
   // Queue State Calculation
   QueueStateModel getQueueState() {
+    final centre = currentCenter;
+    final servingNum = centre.currentServingToken > 0 ? centre.currentServingToken : _currentServingTokenNumber;
     final userTokenStr = _activeToken?.tokenNumber ?? 'TK-104';
     final userTokenNum =
         int.tryParse(userTokenStr.replaceAll(RegExp(r'[^0-9]'), '')) ?? 104;
-    final farmersAhead = (userTokenNum - _currentServingTokenNumber).clamp(
+    final farmersAhead = (userTokenNum - servingNum).clamp(
       0,
       99,
     );
-    final estWaitMinutes = farmersAhead * 12;
+    final avgWait = centre.avgWaitMinutes > 0 ? centre.avgWaitMinutes : 12.0;
+    final estWaitMinutes = (farmersAhead * avgWait).round();
 
-    String statusEn = 'Moving Smoothly (~12 mins/farmer)';
-    String statusTa = 'சீரான வேகம் (~12 நிமிடம்/விவசாயி)';
+    String statusEn = 'Moving Smoothly (~${avgWait.round()} mins/farmer)';
+    String statusTa = 'சீரான வேகம் (~${avgWait.round()} நிமிடம்/விவசாயி)';
 
-    if (farmersAhead == 0) {
+    if (centre.status == 'CLOSED') {
+      statusEn = centre.statusReason != null && centre.statusReason!.isNotEmpty
+          ? 'CENTRE CLOSED: ${centre.statusReason}'
+          : 'Procurement Centre Currently Closed';
+      statusTa = centre.statusReason != null && centre.statusReason!.isNotEmpty
+          ? 'நிலையம் மூடப்பட்டுள்ளது: ${centre.statusReason}'
+          : 'கொள்முதல் நிலையம் தற்போது மூடப்பட்டுள்ளது';
+    } else if (farmersAhead == 0) {
       statusEn = 'YOUR TURN NOW! Proceed to Bay #02';
       statusTa = 'உங்கள் முறை வந்துவிட்டது! எடை பகுதி #02-க்கு செல்லவும்';
     } else if (farmersAhead == 1) {
@@ -334,14 +344,14 @@ class ProcurementRepository extends ChangeNotifier {
 
     List<QueueItem> sequence = [];
     for (
-      int i = _currentServingTokenNumber - 2;
-      i <= _currentServingTokenNumber + 5;
+      int i = servingNum - 2;
+      i <= servingNum + 5;
       i++
     ) {
       if (i <= 0) continue;
       final tk = 'TK-$i';
-      final isServing = (i == _currentServingTokenNumber);
-      final isPast = (i < _currentServingTokenNumber);
+      final isServing = (i == servingNum);
+      final isPast = (i < servingNum);
       final isUser = (tk == userTokenStr);
 
       sequence.add(
@@ -357,13 +367,13 @@ class ProcurementRepository extends ChangeNotifier {
     }
 
     return QueueStateModel(
-      currentServingToken: 'TK-$_currentServingTokenNumber',
+      currentServingToken: 'TK-$servingNum',
       userToken: userTokenStr,
       farmersAhead: farmersAhead,
       estimatedWaitMinutes: estWaitMinutes,
       queueStatusEn: statusEn,
       queueStatusTa: statusTa,
-      totalServedToday: math.max(0, _currentServingTokenNumber - 80),
+      totalServedToday: math.max(0, servingNum - 80),
       queueSequence: sequence,
     );
   }
@@ -513,7 +523,20 @@ class ProcurementRepository extends ChangeNotifier {
 
   // Officer Controls (Calls backend API & local state)
   Future<void> officerNextQueueToken() async {
-    _currentServingTokenNumber++;
+    try {
+      final newServingStr = await _apiProvider.officerNextQueueToken(centreId: _selectedCenterId);
+      if (newServingStr != null) {
+        final parsed = int.tryParse(newServingStr.replaceAll(RegExp(r'[^0-9]'), ''));
+        if (parsed != null) {
+          _currentServingTokenNumber = parsed;
+        }
+      } else {
+        _currentServingTokenNumber++;
+      }
+    } catch (_) {
+      _currentServingTokenNumber++;
+    }
+
     final userTokenStr = _activeToken?.tokenNumber ?? 'TK-104';
     final userTokenNum =
         int.tryParse(userTokenStr.replaceAll(RegExp(r'[^0-9]'), '')) ?? 104;
@@ -534,9 +557,70 @@ class ProcurementRepository extends ChangeNotifier {
       );
     }
 
+    final idx = _centers.indexWhere((c) => c.id == _selectedCenterId);
+    if (idx != -1) {
+      _centers[idx] = ProcurementCenter(
+        id: _centers[idx].id,
+        nameEn: _centers[idx].nameEn,
+        nameTa: _centers[idx].nameTa,
+        district: _centers[idx].district,
+        taluk: _centers[idx].taluk,
+        locationAddress: _centers[idx].locationAddress,
+        latitude: _centers[idx].latitude,
+        longitude: _centers[idx].longitude,
+        workingHours: _centers[idx].workingHours,
+        contactPhone: _centers[idx].contactPhone,
+        status: _centers[idx].status,
+        statusReason: _centers[idx].statusReason,
+        dailyCapacityBags: _centers[idx].dailyCapacityBags,
+        activeTokensCount: math.max(0, _centers[idx].activeTokensCount - 1),
+        currentServingToken: _currentServingTokenNumber,
+        avgWaitMinutes: _centers[idx].avgWaitMinutes,
+      );
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> officerSetCentreStatus(String status, {String? reason}) async {
+    final idx = _centers.indexWhere((c) => c.id == _selectedCenterId);
+    if (idx != -1) {
+      _centers[idx] = ProcurementCenter(
+        id: _centers[idx].id,
+        nameEn: _centers[idx].nameEn,
+        nameTa: _centers[idx].nameTa,
+        district: _centers[idx].district,
+        taluk: _centers[idx].taluk,
+        locationAddress: _centers[idx].locationAddress,
+        latitude: _centers[idx].latitude,
+        longitude: _centers[idx].longitude,
+        workingHours: _centers[idx].workingHours,
+        contactPhone: _centers[idx].contactPhone,
+        status: status,
+        statusReason: reason,
+        dailyCapacityBags: _centers[idx].dailyCapacityBags,
+        activeTokensCount: _centers[idx].activeTokensCount,
+        currentServingToken: _centers[idx].currentServingToken,
+        avgWaitMinutes: _centers[idx].avgWaitMinutes,
+      );
+    }
+
     try {
-      await _apiProvider.officerNextQueueToken();
+      await _apiProvider.officerSetCentreStatus(status, reason: reason, centreId: _selectedCenterId);
     } catch (_) {}
+
+    if (status == 'CLOSED') {
+      final reasonMsg = reason != null && reason.isNotEmpty ? ' Reason: $reason' : '';
+      final reasonMsgTa = reason != null && reason.isNotEmpty ? ' காரணம்: $reason' : '';
+      _addNotification(
+        titleEn: 'Your Procurement Centre is Currently Closed',
+        titleTa: 'உங்கள் கொள்முதல் மையம் தற்போது மூடப்பட்டுள்ளது',
+        messageEn: 'Administrative officers have marked this centre CLOSED.$reasonMsg',
+        messageTa: 'அதிகாரிகள் இந்த மையத்தை மூடியுள்ளனர்.$reasonMsgTa',
+        icon: Icons.error_outline_rounded,
+        color: Colors.red,
+      );
+    }
 
     notifyListeners();
   }

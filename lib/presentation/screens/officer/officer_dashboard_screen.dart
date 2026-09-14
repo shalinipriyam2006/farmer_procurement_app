@@ -14,7 +14,6 @@ class OfficerDashboardScreen extends StatefulWidget {
 class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
   final TextEditingController _bagsCtrl = TextEditingController();
   final TextEditingController _moistureCtrl = TextEditingController();
-  String _centreStatus = 'OPEN'; // OPEN, PAUSED, CLOSED
 
   final List<Map<String, String>> _auditLogs = [
     {
@@ -49,6 +48,52 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
     super.dispose();
   }
 
+  Future<void> _showClosureDialog(BuildContext context, ProcurementRepository repo) async {
+    final reasonController = TextEditingController(text: 'Heavy rain & yard maintenance');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(repo.isTamil ? 'நிலையத்தை மூட முடிவு' : 'Close Procurement Centre'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              repo.isTamil
+                  ? 'விவசாயிகளுக்கான மூடல் காரணத்தை பதிவு செய்யவும்:'
+                  : 'Enter closure reason to display to farmers:',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                labelText: repo.isTamil ? 'காரணம்' : 'Closure Reason',
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: Text(repo.isTamil ? 'ரத்து' : 'Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, reasonController.text.trim()),
+            child: Text(repo.isTamil ? 'உறுதி செய்க' : 'Confirm Closure'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await repo.officerSetCentreStatus('CLOSED', reason: result);
+      _logAudit('CENTRE_STATUS', 'Closed centre: $result');
+    }
+  }
+
   void _logAudit(String action, String details) {
     setState(() {
       _auditLogs.insert(0, {
@@ -70,6 +115,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
         final isTamil = repo.isTamil;
         final activeToken = repo.activeToken;
         final currentStage = activeToken?.currentStage ?? ProcurementStageType.called;
+        final currentStatus = repo.currentCenter.status;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF4F6F8),
@@ -136,7 +182,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            isTamil ? 'நிலைய நிலை: $_centreStatus' : 'Centre Status: $_centreStatus',
+                            isTamil ? 'நிலைய நிலை: $currentStatus' : 'Centre Status: $currentStatus',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           Wrap(
@@ -144,11 +190,11 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                             children: [
                               ElevatedButton(
                                 onPressed: () {
-                                  setState(() => _centreStatus = 'OPEN');
+                                  repo.officerSetCentreStatus('OPEN');
                                   _logAudit('CENTRE_STATUS', 'Opened centre operations');
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _centreStatus == 'OPEN' ? Colors.green : Colors.white24,
+                                  backgroundColor: currentStatus == 'OPEN' ? Colors.green : Colors.white24,
                                   foregroundColor: Colors.white,
                                   minimumSize: Size.zero,
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -157,11 +203,11 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                               ),
                               ElevatedButton(
                                 onPressed: () {
-                                  setState(() => _centreStatus = 'PAUSED');
+                                  repo.officerSetCentreStatus('PAUSED', reason: 'Operations Paused');
                                   _logAudit('CENTRE_STATUS', 'Paused centre queue');
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _centreStatus == 'PAUSED' ? Colors.orange : Colors.white24,
+                                  backgroundColor: currentStatus == 'PAUSED' ? Colors.orange : Colors.white24,
                                   foregroundColor: Colors.white,
                                   minimumSize: Size.zero,
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -169,12 +215,9 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                                 child: Text(isTamil ? 'நிறுத்து' : 'Pause'),
                               ),
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() => _centreStatus = 'CLOSED');
-                                  _logAudit('CENTRE_STATUS', 'Closed centre operations');
-                                },
+                                onPressed: () => _showClosureDialog(context, repo),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _centreStatus == 'CLOSED' ? Colors.red : Colors.white24,
+                                  backgroundColor: currentStatus == 'CLOSED' ? Colors.red : Colors.white24,
                                   foregroundColor: Colors.white,
                                   minimumSize: Size.zero,
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

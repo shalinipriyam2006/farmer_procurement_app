@@ -116,6 +116,11 @@ class _BookTokenScreenState extends State<BookTokenScreen> {
         final lang = repo.language;
         final isTamil = repo.isTamil;
         final activeToken = repo.activeToken;
+        final selectedCenter = repo.centers.firstWhere(
+          (c) => c.id == _selectedCenterId,
+          orElse: () => repo.currentCenter,
+        );
+        final isClosed = selectedCenter.status.toUpperCase() == 'CLOSED';
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -224,6 +229,32 @@ class _BookTokenScreenState extends State<BookTokenScreen> {
                         }
                       },
                     ),
+
+                    if (isClosed) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded, color: Colors.red),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                selectedCenter.statusReason != null && selectedCenter.statusReason!.isNotEmpty
+                                    ? (isTamil ? 'நிலையம் மூடப்பட்டுள்ளது: ${selectedCenter.statusReason}' : 'CENTRE CLOSED: ${selectedCenter.statusReason}')
+                                    : (isTamil ? 'இந்த நிலையம் தற்போது மூடப்பட்டுள்ளது. முன்பதிவு இயலாது.' : 'This centre is currently CLOSED. Booking disabled.'),
+                                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 18),
 
@@ -367,10 +398,12 @@ class _BookTokenScreenState extends State<BookTokenScreen> {
 
                     // Submit Button
                     ElevatedButton.icon(
-                      onPressed: _generateToken,
+                      onPressed: isClosed ? null : _generateToken,
                       icon: const Icon(Icons.confirmation_number_rounded),
                       label: Text(
-                        AppTranslations.text('generate_token_btn', lang),
+                        isClosed
+                            ? (isTamil ? 'நிலையம் மூடப்பட்டுள்ளது' : 'Centre Closed')
+                            : AppTranslations.text('generate_token_btn', lang),
                       ),
                     ),
                   ],

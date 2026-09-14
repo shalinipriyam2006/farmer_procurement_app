@@ -234,20 +234,35 @@ class VoiceAssistantService {
       );
     }
 
-    // 6. WORKING HOURS
+    // 6. WORKING HOURS & CENTRE STATUS
     if (lower.contains('hours') ||
         lower.contains('open') ||
         lower.contains('close') ||
+        lower.contains('closed') ||
         lower.contains('timing') ||
         lower.contains('schedule') ||
+        lower.contains('reason') ||
+        lower.contains('why') ||
         lower.contains('வேலை நேரம்') ||
         lower.contains('திறக்கும்') ||
-        lower.contains('மூடும்')) {
+        lower.contains('மூடும்') ||
+        lower.contains('காரணம்') ||
+        lower.contains('மூடப்பட்டு')) {
+      if (currentCenter.status == 'CLOSED') {
+        final reason = currentCenter.statusReason != null && currentCenter.statusReason!.isNotEmpty
+            ? currentCenter.statusReason!
+            : (isTamil ? 'நிர்வாகக் காரணங்கள்' : 'Administrative reasons');
+        return VoiceQueryResponse(
+          intent: 'CENTRE_STATUS',
+          textEn: 'Procurement Centre ${currentCenter.nameEn} is currently CLOSED. Reason: $reason.',
+          textTa: 'கொள்முதல் மையம் ${currentCenter.nameTa} தற்போது மூடப்பட்டுள்ளது. காரணம்: $reason.',
+        );
+      }
       final hours = currentCenter.workingHours;
       return VoiceQueryResponse(
         intent: 'WORKING_HOURS',
-        textEn: 'Procurement centre working hours are $hours, Monday through Saturday.',
-        textTa: 'கொள்முதல் மையத்தின் வேலை நேரம்: $hours (திங்கள் முதல் சனி வரை).',
+        textEn: 'Procurement centre ${currentCenter.nameEn} is OPEN. Working hours are $hours, Monday through Saturday.',
+        textTa: 'கொள்முதல் மையம் ${currentCenter.nameTa} திறந்து இயங்குகிறது. வேலை நேரம்: $hours (திங்கள் முதல் சனி வரை).',
       );
     }
 

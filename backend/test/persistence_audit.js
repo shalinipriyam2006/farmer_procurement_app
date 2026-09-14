@@ -183,6 +183,11 @@ async function runAudit() {
   const pgAuditRes = await memPool.query("SELECT COUNT(*) as cnt FROM audit_logs WHERE officer_id = 'OFFICER-101'");
   console.log(`F. Audit Logs: Persisted to PostgreSQL? ${parseInt(pgAuditRes.rows[0].cnt) >= 1 ? 'YES' : 'NO'}`);
 
+  // G. Centre Status & Closure Reason Persistence
+  await db.updateCentreStatus('CENTRE-01', 'CLOSED', 'Heavy rain & yard maintenance');
+  const pgStatusRes = await memPool.query("SELECT status, status_reason FROM procurement_centres WHERE id = 'CENTRE-01'");
+  console.log(`G. Centre Status & Closure Reason: Persisted to PostgreSQL? ${pgStatusRes.rows[0].status === 'CLOSED' && pgStatusRes.rows[0].status_reason === 'Heavy rain & yard maintenance' ? 'YES' : 'NO'}`);
+
   console.log('\n================================================================');
   console.log(' PERSISTENCE AUDIT COMPLETED SUCCESSFULLY - 100% PASSED');
   console.log('================================================================');
