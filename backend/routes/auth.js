@@ -9,9 +9,9 @@ const smsAdapter = require('../adapters/sms_adapter');
  */
 router.post('/otp/send', async (req, res) => {
   try {
-    const { mobileNumber } = req.body;
+    const mobileNumber = req.body.mobileNumber || req.body.phone || req.body.mobile;
     if (!mobileNumber) {
-      return res.status(400).json({ success: false, error: 'mobileNumber is required' });
+      return res.status(400).json({ success: false, error: 'mobileNumber (or phone) is required' });
     }
 
     const result = await smsAdapter.sendOtp(mobileNumber);
@@ -30,9 +30,10 @@ router.post('/otp/send', async (req, res) => {
  */
 router.post('/otp/verify', async (req, res) => {
   try {
-    const { mobileNumber, otp } = req.body;
+    const mobileNumber = req.body.mobileNumber || req.body.phone || req.body.mobile;
+    const otp = req.body.otp;
     if (!mobileNumber || !otp) {
-      return res.status(400).json({ success: false, error: 'mobileNumber and otp are required' });
+      return res.status(400).json({ success: false, error: 'mobileNumber (or phone) and otp are required' });
     }
 
     const verification = await smsAdapter.verifyOtp(mobileNumber, otp);
