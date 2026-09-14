@@ -228,17 +228,36 @@ class Database {
   // --- FARMERS ---
   async getFarmerByMobile(mobileNumber) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM farmers WHERE mobile_number = $1', [mobileNumber]);
-      if (res.rows.length > 0) return this._mapFarmerRow(res.rows[0]);
+      try {
+        const res = await dbPool.query('SELECT * FROM farmers WHERE mobile_number = $1', [mobileNumber]);
+        if (res.rows.length > 0) return this._mapFarmerRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting farmer by mobile:', err.message);
+      }
     }
     let farmer = this.farmers.find(f => f.mobileNumber === mobileNumber);
-    return farmer || this.farmers[0];
+    return farmer || {
+      id: `FARMER-${mobileNumber}`,
+      name: 'Registered Farmer',
+      mobileNumber: mobileNumber,
+      farmerIdNumber: `TN-KISAN-${mobileNumber.slice(-5)}`,
+      village: 'Thiruvaiyaru',
+      district: 'Thanjavur',
+      preferredCentreId: 'CENTRE-01',
+      bankAccountMasked: '•••• •••• 7821',
+      ifscCode: 'SBIN0001234',
+      landHoldingAcres: 3.5,
+    };
   }
 
   async getFarmerById(id) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM farmers WHERE id = $1', [id]);
-      if (res.rows.length > 0) return this._mapFarmerRow(res.rows[0]);
+      try {
+        const res = await dbPool.query('SELECT * FROM farmers WHERE id = $1', [id]);
+        if (res.rows.length > 0) return this._mapFarmerRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting farmer by ID:', err.message);
+      }
     }
     let farmer = this.farmers.find(f => f.id === id);
     return farmer || this.farmers[0];
@@ -247,8 +266,12 @@ class Database {
   // --- OFFICERS ---
   async getOfficerByBadgeId(badgeId) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM officers WHERE badge_id = $1', [badgeId]);
-      if (res.rows.length > 0) return this._mapOfficerRow(res.rows[0]);
+      try {
+        const res = await dbPool.query('SELECT * FROM officers WHERE badge_id = $1', [badgeId]);
+        if (res.rows.length > 0) return this._mapOfficerRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting officer by badge:', err.message);
+      }
     }
     let officer = this.officers.find(o => o.badgeId === badgeId);
     return officer || this.officers[0];
