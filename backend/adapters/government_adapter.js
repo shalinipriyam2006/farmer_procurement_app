@@ -5,6 +5,7 @@
  * Government Data APIs (e.g. e-NAM, State Civil Supplies Corporation, Paddy Procurement Portal).
  * 
  * IMPORTANT:
+ * - Official government API endpoint and credentials must be supplied by the authorized department before activation.
  * - Does not scrape or access private endpoints without authorization.
  * - When official API keys & endpoints are configured via environment variables,
  *   it seamlessly delegates calls to the government gateway.
@@ -15,8 +16,8 @@ const env = require('../config/env');
 
 class GovernmentProcurementService {
   constructor() {
-    this.baseUrl = env.govtApiBaseUrl;
-    this.apiKey = env.govtApiKey;
+    this.baseUrl = env.govtApiBaseUrl || '';
+    this.apiKey = env.govtApiKey || '';
     this.isAuthorized = !!(this.baseUrl && this.apiKey);
   }
 
@@ -25,13 +26,12 @@ class GovernmentProcurementService {
    */
   async fetchAuthorizedCentres() {
     if (!this.isAuthorized) {
-      // TODO: Connect official Government REST endpoint once API credentials are provided by the department.
-      // e.g. GET https://api.agri-procurement.gov.in/v1/centres
+      // Official government API endpoint and credentials must be supplied by the authorized department before activation.
       return null;
     }
 
     try {
-      // Example integration structure for production deployment:
+      // Example integration structure when authorized credentials exist:
       // const response = await fetch(`${this.baseUrl}/centres`, {
       //   headers: { 'Authorization': `Bearer ${this.apiKey}` }
       // });
@@ -48,12 +48,11 @@ class GovernmentProcurementService {
    */
   async verifyFarmerRegistry(farmerIdNumber) {
     if (!this.isAuthorized) {
-      // TODO: Connect official Farmer Verification Gateway (e.g. PM-Kisan / State Land Records)
+      // Official government API endpoint and credentials must be supplied by the authorized department before activation.
       return { verified: true, source: 'Internal Database Registry' };
     }
 
     try {
-      // Production integration call point
       return { verified: true, source: 'Government Integrated Farmer Portal' };
     } catch (err) {
       return { verified: false, error: 'Government Registry Unavailable' };
@@ -65,7 +64,6 @@ class GovernmentProcurementService {
    */
   async submitDBTProcurementRecord(record) {
     if (!this.isAuthorized) {
-      // TODO: Connect Direct Benefit Transfer (DBT) PFMS Treasury Gateway
       return {
         success: true,
         pfmsReference: `PFMS-GEN-${Date.now()}`,

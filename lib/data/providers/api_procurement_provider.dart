@@ -55,7 +55,13 @@ class ApiProcurementProvider implements ProcurementDataProvider {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         _authToken = body['token'];
-        return {'success': true, 'token': _authToken, 'user': body['user']};
+        return {
+          'success': true,
+          'isRegistered': body['isRegistered'] ?? true,
+          'token': _authToken,
+          'user': body['user'],
+          'message': body['message'],
+        };
       } else {
         final body = jsonDecode(res.body);
         return {'success': false, 'error': body['error'] ?? 'OTP verification failed'};

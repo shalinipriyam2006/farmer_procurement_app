@@ -3,6 +3,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const jwtSecret = process.env.JWT_SECRET || 'default_jwt_secret';
+const otpDevMode = process.env.OTP_DEV_MODE === 'true' || nodeEnv !== 'production';
 
 if (nodeEnv === 'production') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_jwt_secret') {
@@ -13,6 +14,7 @@ if (nodeEnv === 'production') {
 
 module.exports = {
   nodeEnv,
+  otpDevMode,
   port: process.env.PORT || 3000,
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000/api/v1',
   govtApiBaseUrl: process.env.GOVERNMENT_API_BASE_URL || '',

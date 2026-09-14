@@ -236,18 +236,7 @@ class Database {
       }
     }
     let farmer = this.farmers.find(f => f.mobileNumber === mobileNumber);
-    return farmer || {
-      id: `FARMER-${mobileNumber}`,
-      name: 'Registered Farmer',
-      mobileNumber: mobileNumber,
-      farmerIdNumber: `TN-KISAN-${mobileNumber.slice(-5)}`,
-      village: 'Thiruvaiyaru',
-      district: 'Thanjavur',
-      preferredCentreId: 'CENTRE-01',
-      bankAccountMasked: '•••• •••• 7821',
-      ifscCode: 'SBIN0001234',
-      landHoldingAcres: 3.5,
-    };
+    return farmer || null;
   }
 
   async getFarmerById(id) {

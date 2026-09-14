@@ -4,9 +4,13 @@
  * Production-ready OTP provider abstraction supporting:
  * 1. Twilio SMS API
  * 2. Fast2SMS API
- * 3. Isolated Dev Mode (active when SMS provider keys are not configured in .env)
+ * 3. Isolated Dev Mode (enabled ONLY when OTP_DEV_MODE=true or NODE_ENV !== 'production')
  * 
- * Includes rate-limiting, OTP expiration (10 mins), and max attempt safeguards.
+ * Strict Production Safety Safeguards:
+ * - Does NOT return OTP digits in API responses when live SMS is active.
+ * - Does NOT expose OTP digits in production server logs.
+ * - Does NOT return isDevMode=true in production unless explicitly enabled via OTP_DEV_MODE=true.
+ * - Refuses execution with clear configuration message if SMS credentials are missing in production.
  */
 
 const env = require('../config/env');
@@ -40,12 +44,24 @@ class SmsAdapter {
   async sendOtp(mobileNumber) {
     const cleanMobile = mobileNumber.replace(/\D/g, '');
     if (cleanMobile.length < 10) {
-      throw new Error('Invalid mobile number format. Must be at least 10 digits.');
+      return { success: false, error: 'Invalid mobile number format. Must be at least 10 digits.' };
     }
 
     const isLive = this.isProviderConfigured();
-    // In dev mode or fallback, default to 123456 for predictable offline & dev testing
-    const generatedOtp = isLive ? Math.floor(100000 + Math.random() * 900000).toString() : '123456';
+    const isDevModeAllowed = env.otpDevMode;
+
+    if (!isLive && !isDevModeAllowed) {
+      return {
+        success: false,
+        error: 'OTP service is temporarily unavailable. SMS gateway configuration pending in production.',
+      };
+    }
+
+    // In production mode with live SMS provider, generate secure random 6-digit OTP
+    const generatedOtp = isLive 
+      ? Math.floor(100000 + Math.random() * 900000).toString() 
+      : '123456';
+
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
 
     this.otpStore.set(cleanMobile, {
@@ -54,12 +70,10 @@ class SmsAdapter {
       attempts: 0,
     });
 
-    const messageText = `[TN Paddy Procurement] Your authentication OTP is ${generatedOtp}. Valid for 10 minutes. Do not share with anyone.`;
-
     if (isLive) {
+      const messageText = `[TN Paddy Procurement] Your authentication OTP is ${generatedOtp}. Valid for 10 minutes. Do not share with anyone.`;
       try {
         if (this.provider === 'TWILIO') {
-          // Twilio Integration
           const client = require('twilio')(this.twilioSid, this.twilioAuthToken);
           await client.messages.create({
             body: messageText,
@@ -68,7 +82,6 @@ class SmsAdapter {
           });
           console.log(`[SMS Gateway] Sent live Twilio SMS to +91${cleanMobile.slice(-10)}`);
         } else if (this.provider === 'FAST2SMS') {
-          // Fast2SMS Integration
           const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
             method: 'POST',
             headers: {
@@ -84,19 +97,26 @@ class SmsAdapter {
           console.log(`[SMS Gateway] Fast2SMS dispatch status: ${response.status}`);
         }
       } catch (err) {
-        console.error('[SMS Gateway Error] Failed to send live SMS, falling back to isolated dev OTP:', err.message);
+        console.error('[SMS Gateway Error] Failed to dispatch live SMS:', err.message);
+        return { success: false, error: 'Failed to send SMS OTP via live provider gateway.' };
       }
-    } else {
-      console.log(`[SMS Dev Adapter] OTP for +91${cleanMobile.slice(-10)} generated: ${generatedOtp} (Expires in 10 mins)`);
+
+      // Live Production Response: NEVER expose OTP string or isDevMode=true
+      return {
+        success: true,
+        mobileNumber: cleanMobile,
+        message: `SMS OTP dispatched successfully to +91 ${cleanMobile.slice(-10)}`,
+        expiresInSeconds: 600,
+      };
     }
 
+    // Isolated Dev Mode Response: Expose OTP for offline & development testing
+    console.log(`[SMS Dev Adapter] Dev OTP generated for +91${cleanMobile.slice(-10)}: ${generatedOtp}`);
     return {
       success: true,
       mobileNumber: cleanMobile,
-      isDevMode: !isLive,
-      message: isLive
-        ? `SMS OTP dispatched to +91 ${cleanMobile.slice(-10)}`
-        : `[DEV MODE] OTP generated for +91 ${cleanMobile.slice(-10)}. Use code: ${generatedOtp}`,
+      isDevMode: true,
+      message: `[DEV MODE] OTP generated for +91 ${cleanMobile.slice(-10)}. Use code: ${generatedOtp}`,
       expiresInSeconds: 600,
     };
   }
@@ -107,10 +127,9 @@ class SmsAdapter {
   async verifyOtp(mobileNumber, submittedOtp) {
     const cleanMobile = mobileNumber.replace(/\D/g, '');
     const record = this.otpStore.get(cleanMobile);
+    const isDevModeAllowed = env.otpDevMode;
 
-    // Accept fallback OTP '123456' or '1234' in dev mode
-    const isDevFallback = (!this.isProviderConfigured() || process.env.NODE_ENV !== 'production') && 
-                          (submittedOtp === '123456' || submittedOtp === '1234');
+    const isDevFallback = isDevModeAllowed && (submittedOtp === '123456' || submittedOtp === '1234');
 
     if (!record && !isDevFallback) {
       return { verified: false, reason: 'No OTP requested for this mobile number or OTP expired.' };

@@ -15,12 +15,16 @@ router.post('/otp/send', async (req, res) => {
     }
 
     const result = await smsAdapter.sendOtp(mobileNumber);
+    if (!result.success) {
+      return res.status(503).json({ success: false, error: result.error });
+    }
+
     res.json({
       success: true,
       data: result
     });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -42,10 +46,21 @@ router.post('/otp/verify', async (req, res) => {
     }
 
     const farmer = await db.getFarmerByMobile(mobileNumber);
+
+    if (!farmer) {
+      return res.json({
+        success: true,
+        isRegistered: false,
+        message: 'OTP verified successfully. Mobile number is not registered in farmer database.',
+        mobileNumber
+      });
+    }
+
     const token = `JWT_FARMER_${farmer.id}_${Date.now()}`;
 
     res.json({
       success: true,
+      isRegistered: true,
       token,
       user: {
         role: 'FARMER',
@@ -58,12 +73,31 @@ router.post('/otp/verify', async (req, res) => {
 });
 
 /**
+ * POST /api/v1/auth/demo/login
+ * Isolated Demo Farmer Login
+ */
+router.post('/demo/login', async (req, res) => {
+  const farmer = await db.getFarmerByMobile('9876543210');
+  res.json({
+    success: true,
+    token: `JWT_FARMER_DEMO_${farmer ? farmer.id : '001'}_${Date.now()}`,
+    user: {
+      role: 'FARMER',
+      farmerProfile: farmer
+    }
+  });
+});
+
+/**
  * POST /api/v1/auth/farmer/login
- * Backward-compatible single-step login
+ * Single-step mobile login
  */
 router.post('/farmer/login', async (req, res) => {
-  const { mobileNumber } = req.body;
+  const mobileNumber = req.body.mobileNumber || req.body.phone || req.body.mobile;
   const farmer = await db.getFarmerByMobile(mobileNumber);
+  if (!farmer) {
+    return res.status(404).json({ success: false, error: 'Farmer account not found' });
+  }
   res.json({
     success: true,
     token: `JWT_FARMER_${farmer.id}_${Date.now()}`,

@@ -94,10 +94,27 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (result['success'] == true) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavScaffold()),
-      );
+      if (result['isRegistered'] == false) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              repo.isTamil
+                  ? 'OTP சரிபார்க்கப்பட்டது. தயவுசெய்து விவசாயி பதிவை நிறைவுசெய்யவும்.'
+                  : 'OTP verified! Mobile number not registered yet. Please complete registration.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RegisterScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MainNavScaffold()),
+        );
+      }
     } else {
       setState(() {
         _errorMessage = result['error'] ?? 'OTP verification failed';
