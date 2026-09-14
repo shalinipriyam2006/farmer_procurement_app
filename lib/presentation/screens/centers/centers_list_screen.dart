@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:farmer_procurement_app/core/constants/app_colors.dart';
 import 'package:farmer_procurement_app/core/localization/app_translations.dart';
+import 'package:farmer_procurement_app/core/models/procurement_center.dart';
 import 'package:farmer_procurement_app/core/services/location_service.dart';
 import 'package:farmer_procurement_app/data/procurement_repository.dart';
+
+enum CentreFilterMode { smart, nearest, shortestQueue, lowestWait }
 
 class CentersListScreen extends StatefulWidget {
   const CentersListScreen({super.key});
@@ -13,7 +16,7 @@ class CentersListScreen extends StatefulWidget {
 
 class _CentersListScreenState extends State<CentersListScreen> {
   bool _isMapView = false;
-  bool _sortByNearest = false;
+  CentreFilterMode _filterMode = CentreFilterMode.smart;
   bool _isLoadingGps = true;
   UserLocationResult _userLocation = const UserLocationResult(
     latitude: LocationService.defaultLat,
@@ -35,11 +38,19 @@ class _CentersListScreenState extends State<CentersListScreen> {
       setState(() {
         _userLocation = location;
         _isLoadingGps = false;
-        if (!location.isFallback) {
-          _sortByNearest = true; // Auto-sort by nearest when real GPS is detected
-        }
       });
     }
+  }
+
+  double _calculateScore(ProcurementCenter c) {
+    final dist = LocationService.calculateDistanceKm(
+      _userLocation.latitude,
+      _userLocation.longitude,
+      c.latitude,
+      c.longitude,
+    );
+    final statusBonus = c.status.toUpperCase() == 'OPEN' ? 100.0 : 0.0;
+    return statusBonus - (dist * 2.0) - (c.activeTokensCount * 0.5) - (c.avgWaitMinutes * 1.0);
   }
 
   @override
@@ -51,15 +62,35 @@ class _CentersListScreenState extends State<CentersListScreen> {
       builder: (context, _) {
         final lang = repo.language;
         final isTamil = repo.isTamil;
-        var centers = repo.centers;
+        var centers = List<ProcurementCenter>.from(repo.centers);
         final selectedId = repo.selectedCenterId;
 
-        if (_sortByNearest && !_userLocation.isFallback) {
-          centers = LocationService.sortCentresByNearest(
-            centers,
-            userLat: _userLocation.latitude,
-            userLon: _userLocation.longitude,
-          );
+        // Find top recommended centre id
+        String topRecommendedId = '';
+        if (centers.isNotEmpty) {
+          final sortedForRec = List<ProcurementCenter>.from(centers)
+            ..sort((a, b) => _calculateScore(b).compareTo(_calculateScore(a)));
+          topRecommendedId = sortedForRec.first.id;
+        }
+
+        // Apply selected sorting mode
+        switch (_filterMode) {
+          case CentreFilterMode.smart:
+            centers.sort((a, b) => _calculateScore(b).compareTo(_calculateScore(a)));
+            break;
+          case CentreFilterMode.nearest:
+            centers = LocationService.sortCentresByNearest(
+              centers,
+              userLat: _userLocation.latitude,
+              userLon: _userLocation.longitude,
+            );
+            break;
+          case CentreFilterMode.shortestQueue:
+            centers.sort((a, b) => a.activeTokensCount.compareTo(b.activeTokensCount));
+            break;
+          case CentreFilterMode.lowestWait:
+            centers.sort((a, b) => a.avgWaitMinutes.compareTo(b.avgWaitMinutes));
+            break;
         }
 
         return Scaffold(
@@ -79,101 +110,108 @@ class _CentersListScreenState extends State<CentersListScreen> {
             children: [
               // GPS Status & Filter Control Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 color: AppColors.surfaceVariant,
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilterChip(
-                            selected: _sortByNearest && !_userLocation.isFallback,
-                            avatar: Icon(
-                              _userLocation.isFallback
-                                  ? Icons.location_off_rounded
-                                  : Icons.my_location_rounded,
-                              size: 18,
-                              color: (_sortByNearest && !_userLocation.isFallback) ? Colors.white : AppColors.primary,
-                            ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            selected: _filterMode == CentreFilterMode.smart,
+                            avatar: const Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.amber),
                             label: Text(
-                              _userLocation.isFallback
-                                  ? (isTamil ? 'இருப்பிடம் பெறப்படவில்லை' : 'Location unavailable')
-                                  : (isTamil ? 'அருகிலுள்ள மையங்கள் (GPS)' : 'Nearest Centres (Real GPS)'),
+                              isTamil ? '⭐ AI பரிந்துரை' : '⭐ Recommended',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: (_sortByNearest && !_userLocation.isFallback) ? Colors.white : AppColors.textPrimary,
+                                fontSize: 12,
+                                color: _filterMode == CentreFilterMode.smart ? Colors.white : AppColors.textPrimary,
                               ),
                             ),
                             selectedColor: AppColors.primary,
-                            onSelected: (val) {
-                              if (_userLocation.isFallback) {
-                                _acquireGpsLocation();
-                              } else {
-                                setState(() {
-                                  _sortByNearest = val;
-                                });
-                              }
-                            },
+                            onSelected: (_) => setState(() => _filterMode = CentreFilterMode.smart),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            selected: _filterMode == CentreFilterMode.nearest,
+                            avatar: const Icon(Icons.near_me_rounded, size: 16),
+                            label: Text(
+                              isTamil ? 'அருகில்' : 'Nearest GPS',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: _filterMode == CentreFilterMode.nearest ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            selectedColor: AppColors.primary,
+                            onSelected: (_) => setState(() => _filterMode = CentreFilterMode.nearest),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            selected: _filterMode == CentreFilterMode.shortestQueue,
+                            avatar: const Icon(Icons.groups_rounded, size: 16),
+                            label: Text(
+                              isTamil ? 'குறைந்த வரிசை' : 'Shortest Queue',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: _filterMode == CentreFilterMode.shortestQueue ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            selectedColor: AppColors.primary,
+                            onSelected: (_) => setState(() => _filterMode = CentreFilterMode.shortestQueue),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            selected: _filterMode == CentreFilterMode.lowestWait,
+                            avatar: const Icon(Icons.timer_rounded, size: 16),
+                            label: Text(
+                              isTamil ? 'குறைந்த நேரம்' : 'Lowest Wait',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: _filterMode == CentreFilterMode.lowestWait ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                            selectedColor: AppColors.primary,
+                            onSelected: (_) => setState(() => _filterMode = CentreFilterMode.lowestWait),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          _userLocation.isFallback ? Icons.location_off_rounded : Icons.my_location_rounded,
+                          size: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _userLocation.isFallback
+                                ? (isTamil ? 'இருப்பிடம்: பொதுவான நிலை (GPS)' : 'Location: Default (GPS Offline)')
+                                : (isTamil ? 'GPS செயல்படுகிறது (${_userLocation.latitude.toStringAsFixed(3)}, ${_userLocation.longitude.toStringAsFixed(3)})' : 'GPS Active (${_userLocation.latitude.toStringAsFixed(3)}, ${_userLocation.longitude.toStringAsFixed(3)})'),
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                           ),
                         ),
                         if (_isLoadingGps)
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                         else
-                          IconButton(
-                            icon: const Icon(Icons.refresh_rounded, size: 20),
-                            onPressed: _acquireGpsLocation,
-                            tooltip: 'Refresh GPS',
+                          InkWell(
+                            onTap: _acquireGpsLocation,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              child: Text(
+                                isTamil ? 'GPS புதுப்பி' : 'Refresh GPS',
+                                style: const TextStyle(fontSize: 11.5, color: AppColors.primary, fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
-                        Text(
-                          '${centers.length} ${isTamil ? "நிலையங்கள்" : "centres"}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 13),
-                        ),
                       ],
                     ),
-                    if (_userLocation.isFallback) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade300),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.location_off_rounded, size: 18, color: Colors.orange.shade900),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                isTamil
-                                    ? 'இருப்பிடம் பெறப்படவில்லை. உங்கள் அருகிலுள்ள கொள்முதல் நிலையங்களை கண்டறிய GPS அனுமதியை இயக்கவும்.'
-                                    : 'Location unavailable. Enable location to find procurement centres near you.',
-                                style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            ElevatedButton(
-                              onPressed: _acquireGpsLocation,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                isTamil ? 'மீண்டும் முயற்சிக்க' : 'Retry GPS',
-                                style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -187,6 +225,7 @@ class _CentersListScreenState extends State<CentersListScreen> {
                         itemBuilder: (context, index) {
                           final center = centers[index];
                           final isSelected = center.id == selectedId;
+                          final isRecommended = center.id == topRecommendedId;
                           final name = isTamil ? center.nameTa : center.nameEn;
                           
                           // Only compute and format distance if real GPS position is available
@@ -200,8 +239,10 @@ class _CentersListScreenState extends State<CentersListScreen> {
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(22),
                               border: Border.all(
-                                color: isSelected ? AppColors.primary : AppColors.divider,
-                                width: isSelected ? 2.5 : 1,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : (isRecommended ? Colors.amber.shade700 : AppColors.divider),
+                                width: (isSelected || isRecommended) ? 2.5 : 1,
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -218,6 +259,32 @@ class _CentersListScreenState extends State<CentersListScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  if (isRecommended) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      margin: const EdgeInsets.only(bottom: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade100,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.amber.shade800),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.amber.shade900),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            isTamil ? '⭐ பரிந்துரைக்கப்பட்ட மையம் (Best Match)' : '⭐ RECOMMENDED CENTRE (Best Match)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w900,
+                                              color: Colors.amber.shade900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                   Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [

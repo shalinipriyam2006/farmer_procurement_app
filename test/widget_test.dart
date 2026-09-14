@@ -28,7 +28,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify Farmer Home Screen
-    expect(find.textContaining('Murugan Ramanathan'), findsWidgets);
+    expect(find.textContaining('Raja Ramanathan'), findsWidgets);
 
     // Tap Language button
     final langBtn = find.byIcon(Icons.translate_rounded);

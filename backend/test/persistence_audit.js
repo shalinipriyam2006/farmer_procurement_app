@@ -25,13 +25,13 @@ async function runAudit() {
     VALUES ('CENTRE-01', 'Thanjavur Direct Purchase Centre', 'தஞ்சாவூர் நேரடி நெல் கொள்முதல் நிலையம்', 'Thanjavur', 'Market Committee Road, Thiruvaiyaru, Thanjavur', '+91 4362 278100', 101);
 
     INSERT INTO farmers (id, name, mobile_number, farmer_id_number, village, district, preferred_centre_id, bank_account_masked, ifsc_code)
-    VALUES ('FARMER-001', 'Murugan Ramanathan', '9876543210', 'TN-KISAN-84920', 'Thiruvaiyaru', 'Thanjavur', 'CENTRE-01', '•••• •••• 7821', 'SBIN0001234');
+    VALUES ('FARMER-001', 'Raja Ramanathan', '9876543210', 'TN-KISAN-84920', 'Thiruvaiyaru', 'Thanjavur', 'CENTRE-01', '•••• •••• 7821', 'SBIN0001234');
 
     INSERT INTO officers (id, name, badge_id, centre_id, role)
-    VALUES ('OFFICER-101', 'S. Selvakumar', 'OFFICER-TNCSC-409', 'CENTRE-01', 'OFFICER');
+    VALUES ('OFFICER-101', 'S. Ravi', 'OFFICER-TNCSC-409', 'CENTRE-01', 'OFFICER');
 
     INSERT INTO tokens (id, token_number, farmer_id, farmer_name, centre_id, centre_name_en, centre_name_ta, booking_date, time_slot, crop_name_en, crop_name_ta, estimated_quintals, estimated_bags, current_stage_index, status)
-    VALUES ('TOKEN-2026-104', 'TK-104', 'FARMER-001', 'Murugan Ramanathan', 'CENTRE-01', 'Thanjavur DPC', 'தஞ்சாவூர் மையம்', 'Today', '10:30 AM', 'Paddy (Grade A)', 'நெல்', 30.0, 45, 2, 'CALLED');
+    VALUES ('TOKEN-2026-104', 'TK-104', 'FARMER-001', 'Raja Ramanathan', 'CENTRE-01', 'Thanjavur DPC', 'தஞ்சாவூர் மையம்', 'Today', '10:30 AM', 'Paddy (Grade A)', 'நெல்', 30.0, 45, 2, 'CALLED');
 
     INSERT INTO payments (id, farmer_id, token_number, crop_name_en, crop_name_ta, quantity_quintals, bag_count, msp_rate_per_quintal, deductions, net_amount, status, bank_reference_number, masked_bank_account, ifsc_code)
     VALUES ('PAY-TN-2026-9932', 'FARMER-001', 'TK-104', 'Paddy (Grade A)', 'நெல் (கிரேடு ஏ)', 30.0, 45, 2320.0, 450.0, 69150.0, 'PROCESSING', 'PFMS-TN-8492049281', '•••• •••• 7821', 'SBIN0001234');
@@ -123,7 +123,7 @@ async function runAudit() {
     id: `TOKEN-${Date.now()}`,
     tokenNumber: 'TK-107',
     farmerId: 'FARMER-001',
-    farmerName: 'Murugan Ramanathan',
+    farmerName: 'Raja Ramanathan',
     centreId: 'CENTRE-01',
     centreNameEn: 'Thanjavur DPC',
     centreNameTa: 'தஞ்சாவூர் மையம்',
@@ -149,7 +149,7 @@ async function runAudit() {
   await db.createGrievance({
     id: 'GRV-9901',
     farmerId: 'FARMER-001',
-    farmerName: 'Murugan Ramanathan',
+    farmerName: 'Raja Ramanathan',
     category: 'Moisture Calibration',
     description: 'Recalibration request for Bay 2',
     status: 'SUBMITTED',

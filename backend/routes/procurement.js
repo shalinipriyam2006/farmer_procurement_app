@@ -14,6 +14,16 @@ router.get('/centres', async (req, res) => {
   });
 });
 
+// GET /api/v1/procurement/rates
+router.get('/rates', async (req, res) => {
+  const rates = await db.getProcurementRates();
+  res.json({
+    success: true,
+    source: 'e-NAM Benchmark / Local Administrative Board',
+    data: rates
+  });
+});
+
 // GET /api/v1/procurement/centres/:id
 router.get('/centres/:id', async (req, res) => {
   const centre = await db.getCentreById(req.params.id);

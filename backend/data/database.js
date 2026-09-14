@@ -10,11 +10,11 @@ const dbPool = require('../db/pool');
 
 class Database {
   constructor() {
-    // In-memory fallback arrays for offline development
+    // In-memory fallback arrays for offline development & testing
     this.farmers = [
       {
         id: 'FARMER-001',
-        name: 'Murugan Ramanathan',
+        name: 'Raja Ramanathan',
         mobileNumber: '9876543210',
         farmerIdNumber: 'TN-KISAN-84920',
         village: 'Thiruvaiyaru',
@@ -29,10 +29,33 @@ class Database {
     this.officers = [
       {
         id: 'OFFICER-101',
-        name: 'S. Selvakumar',
+        name: 'S. Ravi',
         badgeId: 'OFFICER-TNCSC-409',
         centreId: 'CENTRE-01',
         role: 'OFFICER',
+      }
+    ];
+
+    this.procurementRates = [
+      {
+        cropEn: 'Paddy (Grade A)',
+        cropTa: 'நெல் (கிரேடு ஏ)',
+        variety: 'Grade A (Common Fair Average Quality)',
+        ratePerQuintal: 2320.0,
+        unit: 'Quintal',
+        effectiveFrom: '2026-01-01',
+        source: 'Development Baseline Rates (e-NAM Benchmark)',
+        lastUpdated: '2026-09-14',
+      },
+      {
+        cropEn: 'Paddy (Common)',
+        cropTa: 'நெல் (சாதாரண தரம்)',
+        variety: 'Common Grade FAQ',
+        ratePerQuintal: 2300.0,
+        unit: 'Quintal',
+        effectiveFrom: '2026-01-01',
+        source: 'Development Baseline Rates (e-NAM Benchmark)',
+        lastUpdated: '2026-09-14',
       }
     ];
 
@@ -53,6 +76,8 @@ class Database {
         activeTokensCount: 38,
         currentServingTokenNum: 101,
         avgWaitMinutes: 12.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
       },
       {
         id: 'CENTRE-02',
@@ -70,6 +95,8 @@ class Database {
         activeTokensCount: 42,
         currentServingTokenNum: 88,
         avgWaitMinutes: 15.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
       },
       {
         id: 'CENTRE-03',
@@ -84,9 +111,11 @@ class Database {
         contactPhone: '+91 431 2410882',
         status: 'OPEN',
         dailyCapacityBags: 1500,
-        activeTokensCount: 29,
+        activeTokensCount: 19,
         currentServingTokenNum: 54,
-        avgWaitMinutes: 10.0,
+        avgWaitMinutes: 8.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
       },
       {
         id: 'CENTRE-04',
@@ -104,6 +133,84 @@ class Database {
         activeTokensCount: 22,
         currentServingTokenNum: 31,
         avgWaitMinutes: 14.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)'],
+      },
+      {
+        id: 'CENTRE-05',
+        nameEn: 'Nagapattinam Coastal DPC',
+        nameTa: 'நாகப்பட்டினம் கடலோர கொள்முதல் மையம்',
+        district: 'Nagapattinam',
+        taluk: 'Kilvelur',
+        locationAddress: 'Main Road, Kilvelur, Nagapattinam - 611104',
+        latitude: 10.7656,
+        longitude: 79.8424,
+        workingHours: '08:30 AM - 05:00 PM',
+        contactPhone: '+91 4365 224100',
+        status: 'OPEN',
+        dailyCapacityBags: 900,
+        activeTokensCount: 15,
+        currentServingTokenNum: 45,
+        avgWaitMinutes: 9.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
+      },
+      {
+        id: 'CENTRE-06',
+        nameEn: 'Cuddalore Regulated Market Yard',
+        nameTa: 'கடலூர் ஒழுங்குமுறை விற்பனைக்கூட வளாகம்',
+        district: 'Cuddalore',
+        taluk: 'Kurinjipadi',
+        locationAddress: 'Station Road, Kurinjipadi, Cuddalore - 607302',
+        latitude: 11.5647,
+        longitude: 79.5912,
+        workingHours: '09:00 AM - 05:30 PM',
+        contactPhone: '+91 4142 288400',
+        status: 'OPEN',
+        dailyCapacityBags: 1100,
+        activeTokensCount: 31,
+        currentServingTokenNum: 70,
+        avgWaitMinutes: 11.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
+      },
+      {
+        id: 'CENTRE-07',
+        nameEn: 'Tiruvallur Agricultural Procurement Centre',
+        nameTa: 'திருவள்ளூர் வேளாண் கொள்முதல் நிலையம்',
+        district: 'Tiruvallur',
+        taluk: 'Tiruttani',
+        locationAddress: 'NH 205 Bypass Road, Tiruvallur - 602001',
+        latitude: 13.1432,
+        longitude: 79.9074,
+        workingHours: '08:30 AM - 05:00 PM',
+        contactPhone: '+91 44 2766 1200',
+        status: 'OPEN',
+        dailyCapacityBags: 1300,
+        activeTokensCount: 27,
+        currentServingTokenNum: 62,
+        avgWaitMinutes: 10.0,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)'],
+      },
+      {
+        id: 'CENTRE-08',
+        nameEn: 'Salem Central Regulated Market',
+        nameTa: 'சேலம் மத்திய ஒழுங்குமுறை விற்பனைக்கூடம்',
+        district: 'Salem',
+        taluk: 'Attur',
+        locationAddress: 'Cuddalore Main Road, Attur, Salem - 636102',
+        latitude: 11.5954,
+        longitude: 78.5986,
+        workingHours: '09:00 AM - 05:00 PM',
+        contactPhone: '+91 427 2441900',
+        status: 'OPEN',
+        dailyCapacityBags: 1400,
+        activeTokensCount: 18,
+        currentServingTokenNum: 40,
+        avgWaitMinutes: 8.5,
+        procurementRate: 2320.0,
+        cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
       }
     ];
 
@@ -112,7 +219,7 @@ class Database {
         id: 'TOKEN-2026-104',
         tokenNumber: 'TK-104',
         farmerId: 'FARMER-001',
-        farmerName: 'Murugan Ramanathan',
+        farmerName: 'Raja Ramanathan',
         centreId: 'CENTRE-01',
         centreNameEn: 'Thanjavur Direct Purchase Centre',
         centreNameTa: 'தஞ்சாவூர் நேரடி நெல் கொள்முதல் நிலையம்',
@@ -177,7 +284,7 @@ class Database {
       {
         id: 'GRV-8021',
         farmerId: 'FARMER-001',
-        farmerName: 'Murugan Ramanathan',
+        farmerName: 'Raja Ramanathan',
         category: 'Moisture Calibration',
         description: 'Discrepancy in moisture testing reading at Bay 1.',
         status: 'IN PROGRESS',
@@ -225,6 +332,11 @@ class Database {
     ];
   }
 
+  // --- RATES ---
+  async getProcurementRates() {
+    return this.procurementRates;
+  }
+
   // --- FARMERS ---
   async getFarmerByMobile(mobileNumber) {
     if (dbPool.isDbConnected) {
@@ -269,36 +381,47 @@ class Database {
   // --- CENTRES ---
   async getCentres() {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM procurement_centres ORDER BY id');
-      if (res.rows.length > 0) return res.rows.map(r => this._mapCentreRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_centres ORDER BY id');
+        if (res.rows.length > 0) return res.rows.map(r => this._mapCentreRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting centres:', err.message);
+      }
     }
     return this.centres;
   }
 
   async getCentreById(id) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM procurement_centres WHERE id = $1', [id]);
-      if (res.rows.length > 0) return this._mapCentreRow(res.rows[0]);
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_centres WHERE id = $1', [id]);
+        if (res.rows.length > 0) return this._mapCentreRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting centre by ID:', err.message);
+      }
     }
     let centre = this.centres.find(c => c.id === id);
     return centre || this.centres[0];
   }
 
   async updateCentreServingToken(centreId, newTokenNum) {
-    // Also update in-memory object for sync compatibility
     let centreMem = this.centres.find(c => c.id === centreId) || this.centres[0];
     centreMem.currentServingTokenNum = newTokenNum;
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `UPDATE procurement_centres 
-         SET current_serving_token_num = $1, 
-             active_tokens_count = GREATEST(0, active_tokens_count - 1) 
-         WHERE id = $2`,
-        [newTokenNum, centreId]
-      );
-      const res = await dbPool.query('SELECT * FROM procurement_centres WHERE id = $1', [centreId]);
-      if (res.rows.length > 0) return this._mapCentreRow(res.rows[0]);
+      try {
+        await dbPool.query(
+          `UPDATE procurement_centres 
+           SET current_serving_token_num = $1, 
+               active_tokens_count = GREATEST(0, active_tokens_count - 1) 
+           WHERE id = $2`,
+          [newTokenNum, centreId]
+        );
+        const res = await dbPool.query('SELECT * FROM procurement_centres WHERE id = $1', [centreId]);
+        if (res.rows.length > 0) return this._mapCentreRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error updating serving token:', err.message);
+      }
     }
     return centreMem;
   }
@@ -308,7 +431,11 @@ class Database {
     centreMem.status = status;
 
     if (dbPool.isDbConnected) {
-      await dbPool.query('UPDATE procurement_centres SET status = $1 WHERE id = $2', [status, centreId]);
+      try {
+        await dbPool.query('UPDATE procurement_centres SET status = $1 WHERE id = $2', [status, centreId]);
+      } catch (err) {
+        console.error('[Database Layer] Error updating status:', err.message);
+      }
     }
     return status;
   }
@@ -316,11 +443,15 @@ class Database {
   // --- TOKENS ---
   async getTokenByFarmerId(farmerId) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query(
-        'SELECT * FROM tokens WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1',
-        [farmerId]
-      );
-      if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+      try {
+        const res = await dbPool.query(
+          'SELECT * FROM tokens WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [farmerId]
+        );
+        if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting token by farmer:', err.message);
+      }
     }
     let token = this.tokens.find(t => t.farmerId === farmerId);
     return token || this.tokens[0];
@@ -330,20 +461,24 @@ class Database {
     this.tokens.unshift(token);
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `INSERT INTO tokens (
-          id, token_number, farmer_id, farmer_name, centre_id, centre_name_en, centre_name_ta,
-          booking_date, time_slot, crop_name_en, crop_name_ta, estimated_quintals, estimated_bags,
-          queue_position, current_stage_index, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-        [
-          token.id, token.tokenNumber, token.farmerId, token.farmerName, token.centreId,
-          token.centreNameEn, token.centreNameTa, token.bookingDate, token.timeSlot,
-          token.cropNameEn, token.cropNameTa, token.estimatedQuintals, token.estimatedBags,
-          token.queuePosition || 1, token.currentStageIndex || 0, token.status || 'GENERATED',
-          token.createdAt || new Date().toISOString()
-        ]
-      );
+      try {
+        await dbPool.query(
+          `INSERT INTO tokens (
+            id, token_number, farmer_id, farmer_name, centre_id, centre_name_en, centre_name_ta,
+            booking_date, time_slot, crop_name_en, crop_name_ta, estimated_quintals, estimated_bags,
+            queue_position, current_stage_index, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+          [
+            token.id, token.tokenNumber, token.farmerId, token.farmerName, token.centreId,
+            token.centreNameEn, token.centreNameTa, token.bookingDate, token.timeSlot,
+            token.cropNameEn, token.cropNameTa, token.estimatedQuintals, token.estimatedBags,
+            token.queuePosition || 1, token.currentStageIndex || 0, token.status || 'GENERATED',
+            token.createdAt || new Date().toISOString()
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating token:', err.message);
+      }
     }
     return token;
   }
@@ -355,14 +490,18 @@ class Database {
     if (bags) tokenMem.estimatedBags = bags;
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `UPDATE tokens 
-         SET current_stage_index = COALESCE($1, current_stage_index),
-             estimated_quintals = COALESCE($2, estimated_quintals),
-             estimated_bags = COALESCE($3, estimated_bags)
-         WHERE id = $4 OR id = (SELECT id FROM tokens ORDER BY created_at DESC LIMIT 1)`,
-        [stageIndex, quintals, bags, tokenId]
-      );
+      try {
+        await dbPool.query(
+          `UPDATE tokens 
+           SET current_stage_index = COALESCE($1, current_stage_index),
+               estimated_quintals = COALESCE($2, estimated_quintals),
+               estimated_bags = COALESCE($3, estimated_bags)
+           WHERE id = $4 OR id = (SELECT id FROM tokens ORDER BY created_at DESC LIMIT 1)`,
+          [stageIndex, quintals, bags, tokenId]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error updating token stage:', err.message);
+      }
     }
     return tokenMem;
   }
@@ -405,8 +544,12 @@ class Database {
   // --- PAYMENTS ---
   async getPaymentsByFarmer(farmerId) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM payments WHERE farmer_id = $1 ORDER BY id DESC', [farmerId]);
-      if (res.rows.length > 0) return res.rows.map(r => this._mapPaymentRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM payments WHERE farmer_id = $1 ORDER BY id DESC', [farmerId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapPaymentRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting payments:', err.message);
+      }
     }
     let p = this.payments.find(pm => pm.farmerId === farmerId);
     return p || this.payments[0];
@@ -415,8 +558,12 @@ class Database {
   // --- NOTIFICATIONS ---
   async getNotificationsByFarmer(farmerId) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM notifications WHERE farmer_id = $1 ORDER BY created_at DESC', [farmerId]);
-      if (res.rows.length > 0) return res.rows.map(r => this._mapNotificationRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM notifications WHERE farmer_id = $1 ORDER BY created_at DESC', [farmerId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapNotificationRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting notifications:', err.message);
+      }
     }
     return this.notifications.filter(n => n.farmerId === farmerId);
   }
@@ -425,15 +572,19 @@ class Database {
     this.notifications.unshift(notif);
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `INSERT INTO notifications (id, farmer_id, title_en, title_ta, message_en, message_ta, is_read, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          notif.id, notif.farmerId, notif.titleEn, notif.titleTa,
-          notif.messageEn, notif.messageTa, notif.isRead || false,
-          notif.timestamp || new Date().toISOString()
-        ]
-      );
+      try {
+        await dbPool.query(
+          `INSERT INTO notifications (id, farmer_id, title_en, title_ta, message_en, message_ta, is_read, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            notif.id, notif.farmerId, notif.titleEn, notif.titleTa,
+            notif.messageEn, notif.messageTa, notif.isRead || false,
+            notif.timestamp || new Date().toISOString()
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating notification:', err.message);
+      }
     }
     return notif;
   }
@@ -441,8 +592,12 @@ class Database {
   // --- GRIEVANCES ---
   async getGrievances() {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM grievances ORDER BY submitted_at DESC');
-      if (res.rows.length > 0) return res.rows.map(r => this._mapGrievanceRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM grievances ORDER BY submitted_at DESC');
+        if (res.rows.length > 0) return res.rows.map(r => this._mapGrievanceRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting grievances:', err.message);
+      }
     }
     return this.grievances;
   }
@@ -451,15 +606,19 @@ class Database {
     this.grievances.unshift(grievance);
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `INSERT INTO grievances (id, farmer_id, farmer_name, category, description, status, remarks, submitted_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          grievance.id, grievance.farmerId, grievance.farmerName, grievance.category,
-          grievance.description, grievance.status || 'SUBMITTED', grievance.remarks,
-          grievance.submittedAt || new Date().toISOString(), grievance.updatedAt || new Date().toISOString()
-        ]
-      );
+      try {
+        await dbPool.query(
+          `INSERT INTO grievances (id, farmer_id, farmer_name, category, description, status, remarks, submitted_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            grievance.id, grievance.farmerId, grievance.farmerName, grievance.category,
+            grievance.description, grievance.status || 'SUBMITTED', grievance.remarks,
+            grievance.submittedAt || new Date().toISOString(), grievance.updatedAt || new Date().toISOString()
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating grievance:', err.message);
+      }
     }
     return grievance;
   }
@@ -467,8 +626,12 @@ class Database {
   // --- DOCUMENTS ---
   async getDocumentsByFarmer(farmerId) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM documents WHERE farmer_id = $1 ORDER BY issued_date DESC', [farmerId]);
-      if (res.rows.length > 0) return res.rows.map(r => this._mapDocumentRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM documents WHERE farmer_id = $1 ORDER BY issued_date DESC', [farmerId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapDocumentRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting documents:', err.message);
+      }
     }
     return this.documents.filter(d => d.farmerId === farmerId) || this.documents;
   }
@@ -485,18 +648,26 @@ class Database {
     this.auditLogs.unshift(auditEntry);
 
     if (dbPool.isDbConnected) {
-      await dbPool.query(
-        `INSERT INTO audit_logs (id, officer_id, action, details, created_at) VALUES ($1, $2, $3, $4, $5)`,
-        [auditEntry.id, auditEntry.officerId, auditEntry.action, auditEntry.details, auditEntry.timestamp]
-      ).catch(err => console.error('Failed to log audit in PostgreSQL:', err.message));
+      try {
+        await dbPool.query(
+          `INSERT INTO audit_logs (id, officer_id, action, details, created_at) VALUES ($1, $2, $3, $4, $5)`,
+          [auditEntry.id, auditEntry.officerId, auditEntry.action, auditEntry.details, auditEntry.timestamp]
+        );
+      } catch (err) {
+        console.error('Failed to log audit in PostgreSQL:', err.message);
+      }
     }
     return auditEntry;
   }
 
   async getAuditLogs(limit = 10) {
     if (dbPool.isDbConnected) {
-      const res = await dbPool.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1', [limit]);
-      if (res.rows.length > 0) return res.rows.map(r => this._mapAuditLogRow(r));
+      try {
+        const res = await dbPool.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1', [limit]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapAuditLogRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting audit logs:', err.message);
+      }
     }
     return this.auditLogs.slice(0, limit);
   }
@@ -546,6 +717,8 @@ class Database {
       activeTokensCount: r.active_tokens_count,
       currentServingTokenNum: r.current_serving_token_num,
       avgWaitMinutes: parseFloat(r.avg_wait_minutes),
+      procurementRate: 2320.0,
+      cropsAccepted: ['Paddy (Grade A)', 'Paddy (Common)'],
     };
   }
 

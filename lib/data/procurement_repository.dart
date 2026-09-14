@@ -57,6 +57,37 @@ class ProcurementRepository extends ChangeNotifier {
     syncWithBackend();
   }
 
+  late List<Map<String, dynamic>> _procurementRates = [
+    {
+      'cropEn': 'Paddy (Grade A)',
+      'cropTa': 'நெல் (கிரேடு ஏ)',
+      'variety': 'Grade A (Common Fair Average Quality)',
+      'ratePerQuintal': 2320.0,
+      'unit': 'Quintal',
+      'source': 'e-NAM Benchmark / Local Administrative Board',
+    },
+    {
+      'cropEn': 'Paddy (Common)',
+      'cropTa': 'நெல் (சாதாரண தரம்)',
+      'variety': 'Common Grade FAQ',
+      'ratePerQuintal': 2300.0,
+      'unit': 'Quintal',
+      'source': 'e-NAM Benchmark / Local Administrative Board',
+    },
+  ];
+
+  List<Map<String, dynamic>> get procurementRates => List.unmodifiable(_procurementRates);
+
+  Future<void> fetchProcurementRates() async {
+    try {
+      final rates = await _apiProvider.getProcurementRates();
+      if (rates.isNotEmpty) {
+        _procurementRates = rates;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   Future<void> syncWithBackend() async {
     try {
       final fetchedCentres = await _apiProvider.getCentres();
@@ -67,6 +98,7 @@ class ProcurementRepository extends ChangeNotifier {
         _syncError = null;
         notifyListeners();
       }
+      await fetchProcurementRates();
       await refreshQueueFromBackend();
     } catch (e) {
       _isOffline = true;

@@ -112,7 +112,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Procurement Officer: S. Selvakumar',
+                                  'Procurement Officer: S. Ravi',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,

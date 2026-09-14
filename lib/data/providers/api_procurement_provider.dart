@@ -120,6 +120,21 @@ class ApiProcurementProvider implements ProcurementDataProvider {
     return [];
   }
 
+  Future<List<Map<String, dynamic>>> getProcurementRates() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/procurement/rates'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final list = body['data'] as List;
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   @override
   Future<ProcurementCenter> getCentreById(String id) async {
     final res = await http.get(
