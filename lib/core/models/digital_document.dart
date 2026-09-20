@@ -46,7 +46,18 @@ class DigitalDocument {
 
   String get fileName {
     final cleanRef = docRefNumber.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    return '$cleanRef.pdf';
+    String prefix = 'BUYWISE_Document';
+    final upperType = type.toUpperCase();
+    if (upperType.contains('TOKEN')) {
+      prefix = 'BUYWISE_Token';
+    } else if (upperType.contains('RECEIPT') || upperType.contains('WEIGH')) {
+      prefix = 'BUYWISE_Receipt';
+    } else if (upperType.contains('QUALITY') || upperType.contains('ACCEPT') || upperType.contains('REJECT')) {
+      prefix = 'BUYWISE_Quality';
+    } else if (upperType.contains('PAYMENT') || upperType.contains('COMPLETION')) {
+      prefix = 'BUYWISE_Payment';
+    }
+    return '${prefix}_$cleanRef.pdf';
   }
 
   IconData get icon {

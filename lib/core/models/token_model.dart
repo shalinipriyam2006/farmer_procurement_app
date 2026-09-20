@@ -54,11 +54,14 @@ class TokenModel {
   int get currentStageIndex => ProcurementStageType.values.indexOf(currentStage);
 
   factory TokenModel.fromJson(Map<String, dynamic> json) {
-    int stageIdx = json['currentStageIndex'] ?? 0;
-    ProcurementStageType stage = ProcurementStageType.tokenGenerated;
-    if (stageIdx < ProcurementStageType.values.length) {
-      stage = ProcurementStageType.values[stageIdx];
+    int stageIdx = json['currentStageIndex'] ?? json['current_stage_index'] ?? 0;
+    if (stageIdx >= ProcurementStageType.values.length) {
+      stageIdx = ProcurementStageType.values.length - 1;
     }
+    if (stageIdx < 0) {
+      stageIdx = 0;
+    }
+    ProcurementStageType stage = ProcurementStageType.values[stageIdx];
     return TokenModel(
       id: json['id'] ?? '',
       tokenNumber: json['tokenNumber'] ?? '',

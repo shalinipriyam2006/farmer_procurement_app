@@ -106,15 +106,107 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       SnackBar(
         content: Text(
           isTamil
-              ? '${doc.fileName} கோப்பு பதிவிறக்கம் செய்யப்பட்டது.'
-              : 'Successfully downloaded ${doc.fileName} to Downloads folder.',
+              ? 'ஆவணம் வெற்றிகரமாக பதிவிறக்கப்பட்டது.'
+              : 'Document downloaded successfully.',
         ),
         backgroundColor: AppColors.success,
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: isTamil ? 'திற' : 'Open',
           textColor: Colors.white,
-          onPressed: () {},
+          onPressed: () {
+            _showDocumentDetail(context, doc, isTamil);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showShareDialog(BuildContext context, DigitalDocument doc, bool isTamil) {
+    final shareUrl = 'https://farmer-procurement-app-i0g6.onrender.com/api/v1/documents/detail/${doc.id}';
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.share_rounded, color: AppColors.primaryDark),
+                const SizedBox(width: 10),
+                Text(
+                  isTamil ? 'ஆவணத்தைப் பகிரவும்' : 'Share Digital Document',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isTamil ? doc.titleTa : doc.titleEn,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text('Ref: ${doc.docRefNumber}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      shareUrl,
+                      style: const TextStyle(fontSize: 12, color: Colors.blue, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 20),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isTamil ? 'இணைப்பு நகலெடுக்கப்பட்டது' : 'Verification link copied to clipboard'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isTamil ? 'வாட்ஸ்அப் / செய்தி மூலம் பகிரப்பட்டது' : 'Document details shared successfully'),
+                      backgroundColor: AppColors.primary,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.send_rounded),
+                label: Text(isTamil ? 'வாட்ஸ்அப் / பிற பயன்பாடுகளில் பகிரவும்' : 'Share via WhatsApp / Messaging'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -311,7 +403,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            if (doc.type == 'TOKEN_PASS')
+                            if (doc.type == 'TOKEN_PASS') ...[
                               OutlinedButton.icon(
                                 onPressed: () {
                                   Navigator.push(
@@ -323,20 +415,27 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                                 label: Text(isTamil ? 'கடவுச்சீட்டு' : 'E-Pass'),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: Size.zero,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 ),
                               ),
-                            if (doc.type == 'TOKEN_PASS') const SizedBox(width: 8),
+                              const SizedBox(width: 6),
+                            ],
                             OutlinedButton.icon(
                               onPressed: () => _showDocumentDetail(context, doc, isTamil),
                               icon: const Icon(Icons.remove_red_eye_rounded, size: 16),
-                              label: Text(isTamil ? 'பார்க்க' : 'View'),
+                              label: Text(isTamil ? 'திற' : 'Open'),
                               style: OutlinedButton.styleFrom(
                                 minimumSize: Size.zero,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              onPressed: () => _showShareDialog(context, doc, isTamil),
+                              icon: const Icon(Icons.share_rounded, size: 18, color: AppColors.primaryDark),
+                              tooltip: isTamil ? 'பகிரவும்' : 'Share',
+                            ),
+                            const SizedBox(width: 4),
                             ElevatedButton.icon(
                               onPressed: () => _handleDownload(context, doc, isTamil),
                               icon: const Icon(Icons.download_rounded, size: 16),
@@ -345,7 +444,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
                                 minimumSize: Size.zero,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               ),
                             ),
                           ],

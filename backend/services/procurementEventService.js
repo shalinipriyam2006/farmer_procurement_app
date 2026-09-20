@@ -180,6 +180,10 @@ class ProcurementEventService {
     let token = tokenId ? await db.getTokenById(tokenId) : await db.getTokenByFarmerId(farmerId);
     if (!token) throw new Error('Active token not found for quality check.');
 
+    const weighing = await db.getWeighingRecordByToken(token.id);
+    const weightQuintals = weighing ? weighing.weightQuintals : (token.estimatedQuintals || 25.50);
+    const bagCount = weighing ? weighing.bagCount : (token.estimatedBags || 45);
+
     const moisture = parseFloat(moisturePercentage);
     const fm = parseFloat(foreignMatterPercentage);
     const isAccepted = moisture <= 17.0 && fm <= 2.0;
@@ -215,7 +219,7 @@ class ProcurementEventService {
       farmerName: token.farmerName,
       centreName: token.centreNameEn,
       cropName: token.cropNameEn,
-      weightQuintals: token.estimatedQuintals || 25.50,
+      weightQuintals,
       moisturePercentage: moisture,
       foreignMatterPercentage: fm,
       qualityGrade: grade,
@@ -236,7 +240,7 @@ class ProcurementEventService {
     });
 
     const fromStatus = token.status;
-    await db.updateTokenStage(token.id, 6, token.estimatedQuintals, token.estimatedBags);
+    await db.updateTokenStage(token.id, 4, weightQuintals, bagCount, 'QUALITY_COMPLETED');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -259,15 +263,15 @@ class ProcurementEventService {
 
     // Auto-advance to ACCEPTED or REJECTED
     if (isAccepted) {
-      return await this._handleProcurementAccepted({ token, qualRecord });
+      return await this._handleProcurementAccepted({ token, qualRecord, weightQuintals, bagCount });
     } else {
-      return await this._handleProcurementRejected({ token, qualRecord, rejectionReason });
+      return await this._handleProcurementRejected({ token, qualRecord, rejectionReason, weightQuintals, bagCount });
     }
   }
 
   // 5. PROCUREMENT_ACCEPTED
-  async _handleProcurementAccepted({ token, qualRecord }) {
-    await db.updateTokenStage(token.id, 7, token.estimatedQuintals, token.estimatedBags);
+  async _handleProcurementAccepted({ token, qualRecord, weightQuintals, bagCount }) {
+    await db.updateTokenStage(token.id, 5, weightQuintals, bagCount, 'ACCEPTED');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -289,12 +293,12 @@ class ProcurementEventService {
     });
 
     // Trigger complete & receipt generation
-    return await this._handleProcurementCompleted({ token, qualRecord });
+    return await this._handleProcurementCompleted({ token, qualRecord, weightQuintals, bagCount });
   }
 
   // 6. PROCUREMENT_REJECTED
-  async _handleProcurementRejected({ token, qualRecord, rejectionReason }) {
-    await db.updateTokenStage(token.id, 7, token.estimatedQuintals, token.estimatedBags);
+  async _handleProcurementRejected({ token, qualRecord, rejectionReason, weightQuintals, bagCount }) {
+    await db.updateTokenStage(token.id, 5, weightQuintals, bagCount, 'REJECTED');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -365,7 +369,7 @@ class ProcurementEventService {
       verificationUrl: `/api/v1/verify/document/BUYWISE-RCP-${receiptNum}`
     });
 
-    await db.updateTokenStage(token.id, 8, weighing.weightQuintals, weighing.bagCount);
+    await db.updateTokenStage(token.id, 5, weighing.weightQuintals, weighing.bagCount, 'COMPLETED');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -390,7 +394,7 @@ class ProcurementEventService {
 
   // 8. PAYMENT_INITIATED & PAYMENT_COMPLETED
   async _handlePaymentInitiated({ token, receipt, netAmount }) {
-    await db.updateTokenStage(token.id, 9, receipt.weightQuintals, receipt.bagCount);
+    await db.updateTokenStage(token.id, 6, receipt.weightQuintals, receipt.bagCount, 'PROCESSING');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -416,7 +420,7 @@ class ProcurementEventService {
   }
 
   async _handlePaymentCompleted({ token, receipt, netAmount }) {
-    await db.updateTokenStage(token.id, 10, receipt.weightQuintals, receipt.bagCount);
+    await db.updateTokenStage(token.id, 7, receipt.weightQuintals, receipt.bagCount, 'COMPLETED');
 
     const voucherNum = `PV-${token.tokenNumber}-${Date.now().toString().slice(-4)}`;
     const voucher = await db.createPaymentVoucher({

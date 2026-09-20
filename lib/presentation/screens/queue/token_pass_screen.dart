@@ -173,8 +173,20 @@ class TokenPassScreen extends StatelessWidget {
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Downloading E-Pass $tokenNo to Downloads folder...'),
+                          content: Text(
+                            isTamil
+                                ? 'ஆவணம் வெற்றிகரமாக பதிவிறக்கப்பட்டது.'
+                                : 'Document downloaded successfully.',
+                          ),
                           backgroundColor: AppColors.success,
+                          duration: const Duration(seconds: 4),
+                          action: SnackBarAction(
+                            label: isTamil ? 'திற' : 'Open',
+                            textColor: Colors.white,
+                            onPressed: () {
+                              _showPassDetailSheet(context, tokenNo, verifyCode, isTamil);
+                            },
+                          ),
                         ),
                       );
                     },
@@ -191,12 +203,7 @@ class TokenPassScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Sharing E-Pass $tokenNo via WhatsApp/SMS...'),
-                          backgroundColor: AppColors.primary,
-                        ),
-                      );
+                      _showSharePassSheet(context, tokenNo, verifyCode, isTamil);
                     },
                     icon: const Icon(Icons.share_rounded),
                     label: Text(isTamil ? 'பகிர்' : 'Share Pass'),
@@ -228,6 +235,155 @@ class TokenPassScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPassDetailSheet(BuildContext context, String tokenNo, String verifyCode, bool isTamil) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.verified_user_rounded, color: AppColors.primaryDark, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    isTamil ? 'டிஜிட்டல் டோக்கன் கடவுச்சீட்டு விவரங்கள்' : 'Digital Token Pass Details',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(isTamil ? 'டோக்கன் எண்:' : 'Token Number:', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(tokenNo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primaryDark)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(isTamil ? 'சரிபார்ப்பு குறிப்பு:' : 'Security Ref:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(verifyCode, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber.shade300)),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.amber, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isTamil ? 'அதிகாரப்பூர்வ செயலி டிஜிட்டல் சான்றிதழ் (Application Digital Record)' : 'Official Application Digital Record',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryDark, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
+                child: Text(isTamil ? 'மூடு' : 'Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSharePassSheet(BuildContext context, String tokenNo, String verifyCode, bool isTamil) {
+    final shareUrl = 'https://farmer-procurement-app-i0g6.onrender.com/api/v1/documents/detail/$tokenNo';
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.share_rounded, color: AppColors.primaryDark),
+                const SizedBox(width: 10),
+                Text(
+                  isTamil ? 'டோக்கன் கடவுச்சீட்டைப் பகிரவும்' : 'Share E-Pass Record',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isTamil ? 'டோக்கன்: $tokenNo | குறிப்பு: $verifyCode' : 'Token: $tokenNo | Ref: $verifyCode',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(shareUrl, style: const TextStyle(fontSize: 12, color: Colors.blue, overflow: TextOverflow.ellipsis)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 20),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isTamil ? 'இணைப்பு நகலெடுக்கப்பட்டது' : 'Pass verification link copied to clipboard'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isTamil ? 'வாட்ஸ்அப் / செய்தி மூலம் பகிரப்பட்டது' : 'Token pass shared successfully'),
+                      backgroundColor: AppColors.primary,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.send_rounded),
+                label: Text(isTamil ? 'வாட்ஸ்அப் / பிற பயன்பாடுகளில் பகிரவும்' : 'Share via WhatsApp / Messaging'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

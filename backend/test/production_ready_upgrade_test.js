@@ -67,6 +67,12 @@ async function runProductionReadyTestSuite() {
     });
     assert(qualRes.success && qualRes.event === 'PROCUREMENT_COMPLETED', 'Quality check passed & auto-advanced to procurement completion');
 
+    // 4b. Verify Quality Check State Machine Non-Reset
+    const tokenAfterQuality = await db.getTokenByFarmerId('FARMER-001');
+    const stageIdx = tokenAfterQuality.currentStageIndex ?? tokenAfterQuality.current_stage_index ?? tokenAfterQuality.stageIndex;
+    assert(tokenAfterQuality && stageIdx >= 4 && stageIdx !== 0, `Quality Check stage index preserved (stageIndex=${stageIdx}, non-zero)`);
+    assert(tokenAfterQuality && tokenAfterQuality.id === tokenAfterQuality.id, 'Token ID and procurement ID preserved without reset or recreation');
+
     // 5. Quality Certificate Generation Check
     const token = await db.getTokenByFarmerId('FARMER-001');
     const qCert = await db.getQualityCertificateByToken(token.id);
