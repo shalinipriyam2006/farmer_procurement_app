@@ -311,4 +311,84 @@ class ApiProcurementProvider implements ProcurementDataProvider {
       return false;
     }
   }
+
+  // --- HARDWARE SIMULATOR & EVENT DISPATCH APIS ---
+  Future<Map<String, dynamic>> dispatchProcurementEvent(String eventType, Map<String, dynamic> payload) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/events/dispatch'),
+        headers: _headers,
+        body: jsonEncode({'eventType': eventType, 'payload': payload}),
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    return {'success': false};
+  }
+
+  Future<List<Map<String, dynamic>>> getFarmerReceipts(String farmerId) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/farmers/$farmerId/receipts'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final list = body['data'] as List;
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>> runSimulatorScale({double weightKg = 50.25, int bagCount = 45, String farmerId = 'FARMER-001'}) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/officer/simulator/scale'),
+        headers: _headers,
+        body: jsonEncode({
+          'weightKg': weightKg,
+          'bagCount': bagCount,
+          'farmerId': farmerId,
+        }),
+      );
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> runSimulatorQuality({double moisturePercentage = 14.2, String farmerId = 'FARMER-001'}) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/officer/simulator/quality'),
+        headers: _headers,
+        body: jsonEncode({
+          'moisturePercentage': moisturePercentage,
+          'farmerId': farmerId,
+        }),
+      );
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> runSimulatorAutoFlow({double customWeightKg = 50.25, double customMoisture = 14.2, String farmerId = 'FARMER-001'}) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/officer/simulator/auto-flow'),
+        headers: _headers,
+        body: jsonEncode({
+          'customWeightKg': customWeightKg,
+          'customMoisture': customMoisture,
+          'farmerId': farmerId,
+        }),
+      );
+      return jsonDecode(res.body);
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
 }

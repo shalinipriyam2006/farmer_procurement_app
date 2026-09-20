@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../data/database');
+const eventService = require('../services/procurementEventService');
 
 // GET /api/v1/officer/dashboard
 router.get('/dashboard', async (req, res) => {
@@ -20,21 +21,24 @@ router.get('/dashboard', async (req, res) => {
   });
 });
 
-// POST /api/v1/officer/queue/call-next
+// POST /api/v1/officer/queue/call-next (Event-driven single action token call)
 router.post('/queue/call-next', async (req, res) => {
-  const { centreId } = req.body || {};
-  const targetCentreId = centreId || 'CENTRE-01';
-  const centre = await db.getCentreById(targetCentreId);
-  const nextServingNum = centre.currentServingTokenNum + 1;
-  const updatedCentre = await db.updateCentreServingToken(centre.id, nextServingNum);
-
-  await db.logAudit('OFFICER-101', 'CALL_NEXT_TOKEN', `Advanced queue token to TK-${nextServingNum} for centre ${centre.id}`);
-
-  res.json({
-    success: true,
-    currentServingToken: `TK-${updatedCentre.currentServingTokenNum}`,
-    data: updatedCentre
-  });
+  try {
+    const { centreId } = req.body || {};
+    const result = await eventService.handleEvent('TOKEN_CALLED', {
+      centreId: centreId || 'CENTRE-01',
+      officerId: 'OFFICER-101'
+    });
+    res.json({
+      success: true,
+      currentServingToken: result.servingToken,
+      data: result.queueState,
+      result
+    });
+  } catch (err) {
+    console.error('[Officer API] Call next error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // POST /api/v1/officer/procurement/update
@@ -56,4 +60,49 @@ router.post('/centre/status', async (req, res) => {
   res.json({ success: true, status, reason, centreId: targetCentreId });
 });
 
+// --- HARDWARE SIMULATOR TRIGGER ENDPOINTS (DEV-ONLY) ---
+router.post('/simulator/scale', async (req, res) => {
+  try {
+    const { weightKg, bagCount, farmerId } = req.body;
+    const result = await eventService.handleEvent('WEIGHT_RECEIVED', {
+      farmerId: farmerId || 'FARMER-001',
+      deviceId: 'SCALE-SIM-01',
+      weightKg: weightKg || 50.25,
+      bagCount: bagCount || 45
+    });
+    res.json({ success: true, message: 'Simulated Scale Reading Ingested Successfully', result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/simulator/quality', async (req, res) => {
+  try {
+    const { moisturePercentage, farmerId } = req.body;
+    const result = await eventService.handleEvent('QUALITY_COMPLETED', {
+      farmerId: farmerId || 'FARMER-001',
+      deviceId: 'QUAL-SIM-01',
+      moisturePercentage: moisturePercentage || 14.2
+    });
+    res.json({ success: true, message: 'Simulated Quality Sensor Reading Ingested Successfully', result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/simulator/auto-flow', async (req, res) => {
+  try {
+    const { farmerId, customWeightKg, customMoisture } = req.body;
+    const result = await eventService.handleEvent('RUN_FULL_SIMULATED_FLOW', {
+      farmerId: farmerId || 'FARMER-001',
+      customWeightKg: customWeightKg || 50.25,
+      customMoisture: customMoisture || 14.2
+    });
+    res.json({ success: true, message: 'Full Simulated Procurement Flow Executed', result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
+

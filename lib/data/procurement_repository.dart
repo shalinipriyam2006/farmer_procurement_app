@@ -9,6 +9,7 @@ import 'package:farmer_procurement_app/core/models/token_model.dart';
 import 'package:farmer_procurement_app/core/models/procurement_stage.dart';
 import 'package:farmer_procurement_app/core/models/queue_model.dart';
 import 'package:farmer_procurement_app/core/models/payment_model.dart';
+import 'package:farmer_procurement_app/core/models/procurement_receipt.dart';
 import 'package:farmer_procurement_app/core/models/app_notification.dart';
 import 'package:farmer_procurement_app/data/mock_data.dart';
 import 'package:farmer_procurement_app/data/providers/api_procurement_provider.dart';
@@ -43,6 +44,7 @@ class ProcurementRepository extends ChangeNotifier {
   TokenModel? _activeToken;
   late PaymentModel _payment;
   late List<AppNotification> _notifications;
+  List<ProcurementReceipt> _receipts = [];
   int _currentServingTokenNumber = 101;
 
   void _initDefaults() {
@@ -52,6 +54,7 @@ class ProcurementRepository extends ChangeNotifier {
     _activeToken = MockData.initialToken;
     _payment = MockData.initialPayment;
     _notifications = List.from(MockData.initialNotifications);
+    _receipts = [];
 
     // Initial sync attempt with API provider
     syncWithBackend();
@@ -77,6 +80,8 @@ class ProcurementRepository extends ChangeNotifier {
   ];
 
   List<Map<String, dynamic>> get procurementRates => List.unmodifiable(_procurementRates);
+  List<ProcurementReceipt> get receipts => List.unmodifiable(_receipts);
+  ProcurementReceipt? get activeReceipt => _receipts.isNotEmpty ? _receipts.first : null;
 
   Future<void> fetchProcurementRates() async {
     try {
@@ -100,11 +105,22 @@ class ProcurementRepository extends ChangeNotifier {
       }
       await fetchProcurementRates();
       await refreshQueueFromBackend();
+      await refreshReceiptsFromBackend();
     } catch (e) {
       _isOffline = true;
       _syncError = 'Unable to connect to live backend ($e)';
       notifyListeners();
     }
+  }
+
+  Future<void> refreshReceiptsFromBackend() async {
+    try {
+      final rawReceipts = await _apiProvider.getFarmerReceipts(_currentFarmer.id);
+      if (rawReceipts.isNotEmpty) {
+        _receipts = rawReceipts.map((r) => ProcurementReceipt.fromJson(r)).toList();
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshQueueFromBackend() async {
@@ -127,6 +143,36 @@ class ProcurementRepository extends ChangeNotifier {
       _syncError = 'Backend unavailable: $e';
       notifyListeners();
     }
+  }
+
+  // Hardware Simulator Actions (Development Only)
+  Future<Map<String, dynamic>> runSimulatorScale({double weightKg = 50.25, int bagCount = 45}) async {
+    final res = await _apiProvider.runSimulatorScale(
+      weightKg: weightKg,
+      bagCount: bagCount,
+      farmerId: _currentFarmer.id,
+    );
+    await syncWithBackend();
+    return res;
+  }
+
+  Future<Map<String, dynamic>> runSimulatorQuality({double moisturePercentage = 14.2}) async {
+    final res = await _apiProvider.runSimulatorQuality(
+      moisturePercentage: moisturePercentage,
+      farmerId: _currentFarmer.id,
+    );
+    await syncWithBackend();
+    return res;
+  }
+
+  Future<Map<String, dynamic>> runSimulatorAutoFlow({double customWeightKg = 50.25, double customMoisture = 14.2}) async {
+    final res = await _apiProvider.runSimulatorAutoFlow(
+      customWeightKg: customWeightKg,
+      customMoisture: customMoisture,
+      farmerId: _currentFarmer.id,
+    );
+    await syncWithBackend();
+    return res;
   }
 
   // Getters

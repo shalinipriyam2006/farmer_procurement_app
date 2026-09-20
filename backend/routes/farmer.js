@@ -86,4 +86,19 @@ router.get('/:id/notifications', async (req, res) => {
   res.json({ success: true, data: notifs });
 });
 
+// GET /api/v1/farmers/:id/receipts (Digital Procurement Receipts)
+router.get('/:id/receipts', async (req, res) => {
+  const receipts = await db.getReceiptsByFarmer(req.params.id);
+  res.json({ success: true, data: receipts });
+});
+
+// GET /api/v1/farmers/receipts/detail/:receiptId
+router.get('/receipts/detail/:receiptId', async (req, res) => {
+  const receipt = await db.getReceiptById(req.params.receiptId);
+  if (!receipt) {
+    return res.status(404).json({ success: false, error: 'Procurement receipt not found.' });
+  }
+  res.json({ success: true, data: receipt });
+});
+
 module.exports = router;

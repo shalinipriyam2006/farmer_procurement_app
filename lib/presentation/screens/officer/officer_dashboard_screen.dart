@@ -305,6 +305,108 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
 
                 const SizedBox(height: 18),
 
+                // Hardware Event Simulator Panel (DEVELOPMENT / HARDWARE-READY)
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(color: Colors.amber.shade600, width: 1.5),
+                  ),
+                  color: Colors.amber.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.memory_rounded, color: Colors.deepOrange, size: 22),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                isTamil ? 'கருவி உருவகப்படுத்துதல் (DEVELOPMENT SIMULATOR)' : 'Hardware Event Simulator (DEV / HARDWARE-READY)',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          isTamil
+                              ? 'உண்மையான டிஜிட்டல் எடைகல் மற்றும் தர உணரி சாதன நிகழ்வுகளை சோதிக்க கீழே தேர்ந்தெடுக்கவும்.'
+                              : 'Trigger real-time scale weighment & quality sensor events to test automatic backend workflow.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final res = await repo.runSimulatorScale(weightKg: 50.25, bagCount: 45);
+                                _logAudit('SCALE_EVENT', 'Simulated scale: 50.25 kg/bag (45 bags)');
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(res['message'] ?? 'Scale reading ingested (50.25 kg/bag)')),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.scale_rounded, size: 18),
+                              label: Text(isTamil ? 'எடை உணரி (50.25 kg)' : 'Scale Event (50.25 kg)'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrange,
+                                foregroundColor: Colors.white,
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final res = await repo.runSimulatorQuality(moisturePercentage: 14.2);
+                                _logAudit('QUALITY_EVENT', 'Simulated quality sensor: 14.2% moisture');
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(res['message'] ?? 'Quality sensor reading ingested (14.2%)')),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.biotech_rounded, size: 18),
+                              label: Text(isTamil ? 'தர உணரி (14.2% FAQ)' : 'Quality Sensor (14.2%)'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final res = await repo.runSimulatorAutoFlow(customWeightKg: 50.25, customMoisture: 14.2);
+                                _logAudit('AUTO_FLOW', 'Executed full automated procurement pipeline');
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(res['message'] ?? 'Full automated procurement pipeline executed.')),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.auto_mode_rounded, size: 18),
+                              label: Text(isTamil ? 'முழு தானியங்கி ஓட்டம்' : 'Full Auto Workflow'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryDark,
+                                foregroundColor: Colors.white,
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
                 // 2. Lifecycle Stage Control
                 Card(
                   shape: RoundedRectangleBorder(

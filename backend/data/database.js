@@ -461,6 +461,30 @@ class Database {
   }
 
   // --- TOKENS ---
+  async getTokenById(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM tokens WHERE id = $1', [tokenId]);
+        if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting token by ID:', err.message);
+      }
+    }
+    return this.tokens.find(t => t.id === tokenId) || this.tokens[0];
+  }
+
+  async getTokenByNumber(tokenNumber) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM tokens WHERE token_number = $1', [tokenNumber]);
+        if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting token by number:', err.message);
+      }
+    }
+    return this.tokens.find(t => t.tokenNumber === tokenNumber) || null;
+  }
+
   async getTokenByFarmerId(farmerId) {
     if (dbPool.isDbConnected) {
       try {
@@ -503,11 +527,27 @@ class Database {
     return token;
   }
 
-  async updateTokenStage(tokenId, stageIndex, quintals, bags) {
+  async updateTokenStage(tokenId, stageIndex, quintals, bags, status) {
     let tokenMem = this.tokens.find(t => t.id === tokenId) || this.tokens[0];
     if (stageIndex !== undefined) tokenMem.currentStageIndex = stageIndex;
     if (quintals) tokenMem.estimatedQuintals = quintals;
     if (bags) tokenMem.estimatedBags = bags;
+    
+    const stageStatusMap = {
+      0: 'GENERATED',
+      1: 'CALLED',
+      2: 'WAITING',
+      3: 'PROCESSING',
+      4: 'PROCESSING',
+      5: 'PROCESSING',
+      6: 'PROCESSING',
+      7: status || 'PROCESSING',
+      8: 'COMPLETED',
+      9: 'PROCESSING',
+      10: 'COMPLETED'
+    };
+    const finalStatus = status || stageStatusMap[stageIndex] || tokenMem.status;
+    tokenMem.status = finalStatus;
 
     if (dbPool.isDbConnected) {
       try {
@@ -515,9 +555,10 @@ class Database {
           `UPDATE tokens 
            SET current_stage_index = COALESCE($1, current_stage_index),
                estimated_quintals = COALESCE($2, estimated_quintals),
-               estimated_bags = COALESCE($3, estimated_bags)
-           WHERE id = $4 OR id = (SELECT id FROM tokens ORDER BY created_at DESC LIMIT 1)`,
-          [stageIndex, quintals, bags, tokenId]
+               estimated_bags = COALESCE($3, estimated_bags),
+               status = COALESCE($4, status)
+           WHERE id = $5`,
+          [stageIndex, quintals, bags, finalStatus, tokenId]
         );
       } catch (err) {
         console.error('[Database Layer] Error updating token stage:', err.message);
@@ -853,6 +894,300 @@ class Database {
     };
   }
 
+  _mapDeviceRow(r) {
+    return {
+      id: r.id,
+      centreId: r.centre_id,
+      deviceId: r.device_id,
+      deviceType: r.device_type,
+      deviceSecret: r.device_secret,
+      status: r.status,
+      createdAt: r.created_at,
+    };
+  }
+
+  _mapWeighingRow(r) {
+    return {
+      id: r.id,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      centreId: r.centre_id,
+      deviceId: r.device_id,
+      weightKg: parseFloat(r.weight_kg),
+      weightQuintals: parseFloat(r.weight_quintals),
+      bagCount: parseInt(r.bag_count, 10),
+      readingStatus: r.reading_status,
+      timestamp: r.timestamp,
+    };
+  }
+
+  _mapQualityRow(r) {
+    return {
+      id: r.id,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      centreId: r.centre_id,
+      deviceId: r.device_id,
+      inspectorId: r.inspector_id,
+      moisturePercentage: parseFloat(r.moisture_percentage),
+      foreignMatterPercentage: parseFloat(r.foreign_matter_percentage),
+      qualityGrade: r.quality_grade,
+      qualityStatus: r.quality_status,
+      rejectionReason: r.rejection_reason,
+      timestamp: r.timestamp,
+    };
+  }
+
+  _mapStatusHistoryRow(r) {
+    return {
+      id: r.id,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      fromStatus: r.from_status,
+      toStatus: r.to_status,
+      triggerEvent: r.trigger_event,
+      triggeredBy: r.triggered_by,
+      timestamp: r.timestamp,
+    };
+  }
+
+  _mapReceiptRow(r) {
+    return {
+      id: r.id,
+      receiptNumber: r.receipt_number,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      farmerName: r.farmer_name,
+      centreId: r.centre_id,
+      centreName: r.centre_name,
+      cropName: r.crop_name,
+      weightQuintals: parseFloat(r.weight_quintals),
+      bagCount: parseInt(r.bag_count, 10),
+      qualityGrade: r.quality_grade,
+      moisturePercentage: parseFloat(r.moisture_percentage),
+      applicableRate: parseFloat(r.applicable_rate),
+      grossAmount: parseFloat(r.gross_amount),
+      deductions: parseFloat(r.deductions),
+      netAmount: parseFloat(r.net_amount),
+      issuedAt: r.issued_at,
+      documentUrl: r.document_url,
+    };
+  }
+
+  // --- DEVICE REGISTRATION & SECURITY ---
+  async registerDevice({ id, centreId, deviceId, deviceType, deviceSecret, status = 'ACTIVE' }) {
+    const dev = { id, centreId, deviceId, deviceType, deviceSecret, status, createdAt: new Date().toISOString() };
+    if (!this.deviceRegistrations) this.deviceRegistrations = [];
+    const idx = this.deviceRegistrations.findIndex(d => d.deviceId === deviceId);
+    if (idx >= 0) this.deviceRegistrations[idx] = dev;
+    else this.deviceRegistrations.push(dev);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO device_registrations (id, centre_id, device_id, device_type, device_secret, status)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (device_id) DO UPDATE SET centre_id = $2, device_type = $4, device_secret = $5, status = $6`,
+          [id, centreId, deviceId, deviceType, deviceSecret, status]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error registering device:', err.message);
+      }
+    }
+    return dev;
+  }
+
+  async getDeviceById(deviceId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM device_registrations WHERE device_id = $1', [deviceId]);
+        if (res.rows.length > 0) return this._mapDeviceRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting device:', err.message);
+      }
+    }
+    if (!this.deviceRegistrations) this.deviceRegistrations = [];
+    return this.deviceRegistrations.find(d => d.deviceId === deviceId) || null;
+  }
+
+  async verifyDevice(deviceId, deviceSecret) {
+    const dev = await this.getDeviceById(deviceId);
+    if (!dev) return { valid: false, message: 'Device not registered.' };
+    if (dev.deviceSecret !== deviceSecret) return { valid: false, message: 'Invalid device security credentials.' };
+    if (dev.status !== 'ACTIVE') return { valid: false, message: 'Device is currently inactive.' };
+    return { valid: true, device: dev };
+  }
+
+  // --- WEIGHING RECORDS ---
+  async createWeighingRecord({ id, tokenId, farmerId, centreId, deviceId, weightKg, weightQuintals, bagCount, readingStatus = 'STABLE_FINAL' }) {
+    const rec = { id, tokenId, farmerId, centreId, deviceId, weightKg, weightQuintals, bagCount, readingStatus, timestamp: new Date().toISOString() };
+    if (!this.weighingRecords) this.weighingRecords = [];
+    this.weighingRecords.unshift(rec);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO weighing_records (id, token_id, farmer_id, centre_id, device_id, weight_kg, weight_quintals, bag_count, reading_status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [id, tokenId, farmerId, centreId, deviceId, weightKg, weightQuintals, bagCount, readingStatus]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating weighing record:', err.message);
+      }
+    }
+    return rec;
+  }
+
+  async getWeighingRecordByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM weighing_records WHERE token_id = $1 ORDER BY timestamp DESC LIMIT 1', [tokenId]);
+        if (res.rows.length > 0) return this._mapWeighingRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting weighing record:', err.message);
+      }
+    }
+    if (!this.weighingRecords) this.weighingRecords = [];
+    return this.weighingRecords.find(r => r.tokenId === tokenId) || null;
+  }
+
+  // --- QUALITY RECORDS ---
+  async createQualityRecord({ id, tokenId, farmerId, centreId, deviceId, inspectorId, moisturePercentage, foreignMatterPercentage = 0.5, qualityGrade, qualityStatus, rejectionReason }) {
+    const rec = { id, tokenId, farmerId, centreId, deviceId, inspectorId, moisturePercentage, foreignMatterPercentage, qualityGrade, qualityStatus, rejectionReason, timestamp: new Date().toISOString() };
+    if (!this.qualityRecords) this.qualityRecords = [];
+    this.qualityRecords.unshift(rec);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO quality_records (id, token_id, farmer_id, centre_id, device_id, inspector_id, moisture_percentage, foreign_matter_percentage, quality_grade, quality_status, rejection_reason)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [id, tokenId, farmerId, centreId, deviceId, inspectorId || 'INS-AUTO', moisturePercentage, foreignMatterPercentage, qualityGrade, qualityStatus, rejectionReason || null]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating quality record:', err.message);
+      }
+    }
+    return rec;
+  }
+
+  async getQualityRecordByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM quality_records WHERE token_id = $1 ORDER BY timestamp DESC LIMIT 1', [tokenId]);
+        if (res.rows.length > 0) return this._mapQualityRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting quality record:', err.message);
+      }
+    }
+    if (!this.qualityRecords) this.qualityRecords = [];
+    return this.qualityRecords.find(r => r.tokenId === tokenId) || null;
+  }
+
+  // --- STATUS HISTORY ---
+  async recordStatusHistory({ id, tokenId, farmerId, fromStatus, toStatus, triggerEvent, triggeredBy }) {
+    const rec = { id, tokenId, farmerId, fromStatus, toStatus, triggerEvent, triggeredBy, timestamp: new Date().toISOString() };
+    if (!this.statusHistory) this.statusHistory = [];
+    this.statusHistory.unshift(rec);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO procurement_status_history (id, token_id, farmer_id, from_status, to_status, trigger_event, triggered_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, tokenId, farmerId, fromStatus, toStatus, triggerEvent, triggeredBy]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error recording status history:', err.message);
+      }
+    }
+    return rec;
+  }
+
+  async getStatusHistoryByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_status_history WHERE token_id = $1 ORDER BY timestamp ASC', [tokenId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapStatusHistoryRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting status history:', err.message);
+      }
+    }
+    if (!this.statusHistory) this.statusHistory = [];
+    return this.statusHistory.filter(h => h.tokenId === tokenId);
+  }
+
+  // --- PROCUREMENT RECEIPTS ---
+  async createProcurementReceipt(receiptData) {
+    const receipt = {
+      ...receiptData,
+      issuedAt: receiptData.issuedAt || new Date().toISOString(),
+      documentUrl: receiptData.documentUrl || `/api/v1/farmer/receipts/${receiptData.id}`,
+    };
+    if (!this.procurementReceipts) this.procurementReceipts = [];
+    this.procurementReceipts.unshift(receipt);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO procurement_receipts (
+            id, receipt_number, token_id, farmer_id, farmer_name, centre_id, centre_name,
+            crop_name, weight_quintals, bag_count, quality_grade, moisture_percentage,
+            applicable_rate, gross_amount, deductions, net_amount, document_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+          [
+            receipt.id, receipt.receiptNumber, receipt.tokenId, receipt.farmerId, receipt.farmerName,
+            receipt.centreId, receipt.centreName, receipt.cropName, receipt.weightQuintals, receipt.bagCount,
+            receipt.qualityGrade, receipt.moisturePercentage, receipt.applicableRate, receipt.grossAmount,
+            receipt.deductions, receipt.netAmount, receipt.documentUrl
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating procurement receipt:', err.message);
+      }
+    }
+    return receipt;
+  }
+
+  async getReceiptsByFarmer(farmerId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_receipts WHERE farmer_id = $1 ORDER BY issued_at DESC', [farmerId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapReceiptRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting receipts by farmer:', err.message);
+      }
+    }
+    if (!this.procurementReceipts) this.procurementReceipts = [];
+    return this.procurementReceipts.filter(r => r.farmerId === farmerId);
+  }
+
+  async getReceiptById(receiptId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_receipts WHERE id = $1', [receiptId]);
+        if (res.rows.length > 0) return this._mapReceiptRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting receipt by ID:', err.message);
+      }
+    }
+    if (!this.procurementReceipts) this.procurementReceipts = [];
+    return this.procurementReceipts.find(r => r.id === receiptId) || null;
+  }
+
+  async getReceiptByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM procurement_receipts WHERE token_id = $1', [tokenId]);
+        if (res.rows.length > 0) return this._mapReceiptRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting receipt by token:', err.message);
+      }
+    }
+    if (!this.procurementReceipts) this.procurementReceipts = [];
+    return this.procurementReceipts.find(r => r.tokenId === tokenId) || null;
+  }
+
   async syncFromPostgres() {
     const connInfo = await dbPool.checkConnection();
     if (!connInfo.healthy) {
@@ -865,3 +1200,4 @@ class Database {
 }
 
 module.exports = new Database();
+

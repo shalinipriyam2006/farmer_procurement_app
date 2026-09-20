@@ -11,6 +11,7 @@ const farmerRoutes = require('./routes/farmer');
 const officerRoutes = require('./routes/officer');
 const grievanceRoutes = require('./routes/grievance');
 const documentRoutes = require('./routes/document');
+const eventRoutes = require('./routes/events');
 
 const app = express();
 
@@ -18,7 +19,7 @@ const app = express();
 const corsOptions = {
   origin: env.corsOrigin === '*' ? '*' : env.corsOrigin.split(',').map(o => o.trim()),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Id', 'X-Device-Secret'],
 };
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -42,6 +43,7 @@ app.use('/api/v1/farmers', farmerRoutes);
 app.use('/api/v1/officer', officerRoutes);
 app.use('/api/v1/grievances', grievanceRoutes);
 app.use('/api/v1/documents', documentRoutes);
+app.use('/api/v1/events', eventRoutes);
 
 // Database-Aware Healthcheck Endpoint
 app.get('/api/v1/health', async (req, res) => {

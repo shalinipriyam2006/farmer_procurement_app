@@ -168,6 +168,81 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 13. Device Registrations Table
+CREATE TABLE IF NOT EXISTS device_registrations (
+    id VARCHAR(64) PRIMARY KEY,
+    centre_id VARCHAR(64) REFERENCES procurement_centres(id),
+    device_id VARCHAR(100) UNIQUE NOT NULL,
+    device_type VARCHAR(50) NOT NULL,
+    device_secret VARCHAR(255) NOT NULL,
+    status VARCHAR(30) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Weighing Records Table
+CREATE TABLE IF NOT EXISTS weighing_records (
+    id VARCHAR(64) PRIMARY KEY,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    centre_id VARCHAR(64) REFERENCES procurement_centres(id),
+    device_id VARCHAR(100) NOT NULL,
+    weight_kg DOUBLE PRECISION NOT NULL,
+    weight_quintals DOUBLE PRECISION NOT NULL,
+    bag_count INTEGER NOT NULL,
+    reading_status VARCHAR(50) DEFAULT 'STABLE_FINAL',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Quality Records Table
+CREATE TABLE IF NOT EXISTS quality_records (
+    id VARCHAR(64) PRIMARY KEY,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    centre_id VARCHAR(64) REFERENCES procurement_centres(id),
+    device_id VARCHAR(100) NOT NULL,
+    inspector_id VARCHAR(64),
+    moisture_percentage DOUBLE PRECISION NOT NULL,
+    foreign_matter_percentage DOUBLE PRECISION DEFAULT 0.5,
+    quality_grade VARCHAR(100) NOT NULL,
+    quality_status VARCHAR(50) NOT NULL,
+    rejection_reason TEXT,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Procurement Status History Table
+CREATE TABLE IF NOT EXISTS procurement_status_history (
+    id VARCHAR(64) PRIMARY KEY,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    from_status VARCHAR(50),
+    to_status VARCHAR(50) NOT NULL,
+    trigger_event VARCHAR(100) NOT NULL,
+    triggered_by VARCHAR(100) NOT NULL,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Procurement Receipts Table
+CREATE TABLE IF NOT EXISTS procurement_receipts (
+    id VARCHAR(64) PRIMARY KEY,
+    receipt_number VARCHAR(100) UNIQUE NOT NULL,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    farmer_name VARCHAR(255) NOT NULL,
+    centre_id VARCHAR(64) REFERENCES procurement_centres(id),
+    centre_name VARCHAR(255) NOT NULL,
+    crop_name VARCHAR(100) NOT NULL,
+    weight_quintals DOUBLE PRECISION NOT NULL,
+    bag_count INTEGER NOT NULL,
+    quality_grade VARCHAR(100) NOT NULL,
+    moisture_percentage DOUBLE PRECISION NOT NULL,
+    applicable_rate DOUBLE PRECISION NOT NULL,
+    gross_amount DOUBLE PRECISION NOT NULL,
+    deductions DOUBLE PRECISION NOT NULL,
+    net_amount DOUBLE PRECISION NOT NULL,
+    issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    document_url TEXT
+);
+
 -- Indices for Production Query Performance
 CREATE INDEX IF NOT EXISTS idx_farmers_mobile ON farmers(mobile_number);
 CREATE INDEX IF NOT EXISTS idx_tokens_farmer ON tokens(farmer_id);
@@ -175,3 +250,8 @@ CREATE INDEX IF NOT EXISTS idx_tokens_centre ON tokens(centre_id);
 CREATE INDEX IF NOT EXISTS idx_payments_farmer ON payments(farmer_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_farmer ON notifications(farmer_id);
 CREATE INDEX IF NOT EXISTS idx_grievances_farmer ON grievances(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_weighing_token ON weighing_records(token_id);
+CREATE INDEX IF NOT EXISTS idx_quality_token ON quality_records(token_id);
+CREATE INDEX IF NOT EXISTS idx_status_history_token ON procurement_status_history(token_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_farmer ON procurement_receipts(farmer_id);
+
