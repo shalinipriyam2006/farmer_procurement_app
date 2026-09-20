@@ -104,5 +104,22 @@ router.post('/simulator/auto-flow', async (req, res) => {
   }
 });
 
+// GET /api/v1/officer/feedback
+router.get('/feedback', async (req, res) => {
+  try {
+    const summary = await db.getFeedbackSummary();
+    const list = await db.getFeedbackList();
+    res.json({
+      success: true,
+      summary,
+      list
+    });
+  } catch (err) {
+    console.error('[Officer API] Error fetching feedback:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
+
 

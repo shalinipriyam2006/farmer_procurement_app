@@ -51,6 +51,8 @@ class TokenModel {
     required this.createdAt,
   });
 
+  int get currentStageIndex => ProcurementStageType.values.indexOf(currentStage);
+
   factory TokenModel.fromJson(Map<String, dynamic> json) {
     int stageIdx = json['currentStageIndex'] ?? 0;
     ProcurementStageType stage = ProcurementStageType.tokenGenerated;

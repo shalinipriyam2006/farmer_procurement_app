@@ -92,13 +92,62 @@ router.get('/:id/receipts', async (req, res) => {
   res.json({ success: true, data: receipts });
 });
 
-// GET /api/v1/farmers/receipts/detail/:receiptId
-router.get('/receipts/detail/:receiptId', async (req, res) => {
-  const receipt = await db.getReceiptById(req.params.receiptId);
-  if (!receipt) {
-    return res.status(404).json({ success: false, error: 'Procurement receipt not found.' });
+// POST /api/v1/farmers/token/reschedule
+router.post('/token/reschedule', async (req, res) => {
+  const { tokenId, farmerId, newDate, newTimeSlot } = req.body;
+  const token = await db.getTokenById(tokenId);
+  if (!token) {
+    return res.status(404).json({ success: false, error: 'Original token record not found.' });
   }
-  res.json({ success: true, data: receipt });
+
+  // Record missed slot audit entry
+  await db.createMissedSlotRecord({
+    id: `MISSED-${Date.now()}`,
+    tokenId: token.id,
+    farmerId: farmerId || token.farmerId,
+    centreId: token.centreId,
+    originalBookingDate: token.bookingDate,
+    originalTimeSlot: token.timeSlot,
+    missedReason: 'Farmer requested automated slot rescheduling.',
+    rescheduledTokenId: token.id
+  });
+
+  // Update token booking date & slot
+  token.bookingDate = newDate || 'Tomorrow';
+  token.timeSlot = newTimeSlot || '09:00 AM - 11:00 AM';
+  token.status = 'SCHEDULED';
+  await db.updateTokenStage(token.id, 0, token.estimatedQuintals, token.estimatedBags, 'SCHEDULED');
+
+  await db.createNotification({
+    id: `NOTIF-${Date.now()}`,
+    farmerId: token.farmerId,
+    titleEn: `Token Rescheduled: ${token.tokenNumber}`,
+    titleTa: `டோக்கன் தேதி மாற்றப்பட்டது: ${token.tokenNumber}`,
+    messageEn: `Rescheduled slot confirmed for ${token.bookingDate} (${token.timeSlot}).`,
+    messageTa: `மாற்றப்பட்ட தேதி மற்றும் நேரம் உறுதியானது.`
+  });
+
+  res.json({ success: true, data: token, message: 'Token rescheduled successfully.' });
+});
+
+// POST /api/v1/farmers/feedback
+router.post('/feedback', async (req, res) => {
+  const { farmerId, farmerName, receiptId, overallRating, queueRating, centreRating, staffRating, paymentRating, comment } = req.body;
+  const fb = await db.createFeedback({
+    id: `FB-${Date.now()}`,
+    farmerId: farmerId || 'FARMER-001',
+    farmerName: farmerName || 'Raja Ramanathan',
+    receiptId: receiptId || null,
+    overallRating: parseInt(overallRating || 5, 10),
+    queueRating: parseInt(queueRating || 5, 10),
+    centreRating: parseInt(centreRating || 5, 10),
+    staffRating: parseInt(staffRating || 5, 10),
+    paymentRating: parseInt(paymentRating || 5, 10),
+    comment: comment || ''
+  });
+
+  res.json({ success: true, data: fb, message: 'Feedback submitted successfully.' });
 });
 
 module.exports = router;
+

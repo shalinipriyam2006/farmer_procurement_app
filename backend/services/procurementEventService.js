@@ -205,6 +205,36 @@ class ProcurementEventService {
       rejectionReason
     });
 
+    // Auto-generate Quality Test Certificate
+    const qCertNum = `QCRT-${token.tokenNumber}-${Date.now().toString().slice(-4)}`;
+    await db.createQualityCertificate({
+      id: `CERT-QLT-${Date.now()}`,
+      certificateNumber: qCertNum,
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      farmerName: token.farmerName,
+      centreName: token.centreNameEn,
+      cropName: token.cropNameEn,
+      weightQuintals: token.estimatedQuintals || 25.50,
+      moisturePercentage: moisture,
+      foreignMatterPercentage: fm,
+      qualityGrade: grade,
+      result: isAccepted ? 'ACCEPTED' : 'REJECTED',
+      rejectionReason,
+      testingDevice: deviceId,
+      officerName: 'S. Ravi (Quality Inspector)'
+    });
+
+    await db.createDocumentVerification({
+      id: `VER-QLT-${Date.now()}`,
+      docRefNumber: `BUYWISE-QLT-${qCertNum}`,
+      docType: 'QUALITY_CERTIFICATE',
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      signatureHash: `SIG-QLT-SHA256-${Date.now()}`,
+      verificationUrl: `/api/v1/verify/document/BUYWISE-QLT-${qCertNum}`
+    });
+
     const fromStatus = token.status;
     await db.updateTokenStage(token.id, 6, token.estimatedQuintals, token.estimatedBags);
 
@@ -325,6 +355,16 @@ class ProcurementEventService {
       netAmount
     });
 
+    await db.createDocumentVerification({
+      id: `VER-RCP-${Date.now()}`,
+      docRefNumber: `BUYWISE-RCP-${receiptNum}`,
+      docType: 'PROCUREMENT_RECEIPT',
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      signatureHash: `SIG-RCP-SHA256-${Date.now()}`,
+      verificationUrl: `/api/v1/verify/document/BUYWISE-RCP-${receiptNum}`
+    });
+
     await db.updateTokenStage(token.id, 8, weighing.weightQuintals, weighing.bagCount);
 
     await db.recordStatusHistory({
@@ -378,6 +418,35 @@ class ProcurementEventService {
   async _handlePaymentCompleted({ token, receipt, netAmount }) {
     await db.updateTokenStage(token.id, 10, receipt.weightQuintals, receipt.bagCount);
 
+    const voucherNum = `PV-${token.tokenNumber}-${Date.now().toString().slice(-4)}`;
+    const voucher = await db.createPaymentVoucher({
+      id: `VOUCH-${Date.now()}`,
+      voucherNumber: voucherNum,
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      farmerName: token.farmerName,
+      procurementReceiptNumber: receipt.receiptNumber,
+      centreName: token.centreNameEn,
+      cropName: token.cropNameEn,
+      weightQuintals: receipt.weightQuintals,
+      mspRate: receipt.applicableRate || 2320.0,
+      grossAmount: receipt.grossAmount || (receipt.weightQuintals * 2320.0),
+      deductions: receipt.deductions || 450.0,
+      netAmount,
+      status: 'COMPLETED',
+      bankReferenceNumber: `DBT-TN-2026-${Math.floor(100000 + Math.random() * 900000)}`
+    });
+
+    await db.createDocumentVerification({
+      id: `VER-PAY-${Date.now()}`,
+      docRefNumber: `BUYWISE-PAY-${voucherNum}`,
+      docType: 'PAYMENT_VOUCHER',
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      signatureHash: `SIG-PAY-SHA256-${Date.now()}`,
+      verificationUrl: `/api/v1/verify/document/BUYWISE-PAY-${voucherNum}`
+    });
+
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
       tokenId: token.id,
@@ -402,6 +471,7 @@ class ProcurementEventService {
       event: 'PAYMENT_COMPLETED',
       token,
       receipt,
+      voucher,
       netAmount
     };
   }

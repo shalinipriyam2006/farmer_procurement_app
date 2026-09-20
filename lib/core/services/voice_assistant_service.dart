@@ -3,6 +3,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:farmer_procurement_app/core/models/queue_model.dart';
 import 'package:farmer_procurement_app/core/models/token_model.dart';
 import 'package:farmer_procurement_app/core/models/procurement_center.dart';
+import 'package:farmer_procurement_app/core/models/procurement_stage.dart';
 
 class VoiceQueryResponse {
   final String textEn;
@@ -184,20 +185,100 @@ class VoiceAssistantService {
       );
     }
 
-    // 3. PAYMENT STATUS
+    // 3. PAYMENT STATUS & SLIP
     if (lower.contains('payment') ||
         lower.contains('bank') ||
         lower.contains('payout') ||
         lower.contains('money') ||
         lower.contains('account') ||
         lower.contains('dbt') ||
+        lower.contains('credit') ||
         lower.contains('பணம்') ||
         lower.contains('வங்கி') ||
-        lower.contains('கணக்கு')) {
-      return const VoiceQueryResponse(
+        lower.contains('கணக்கு') ||
+        lower.contains('வந்துவிட்டதா')) {
+      if (lower.contains('show') || lower.contains('slip') || lower.contains('view') || lower.contains('காண்பி')) {
+        return const VoiceQueryResponse(
+          intent: 'NAVIGATE_PAYMENT',
+          textEn: 'Opening your digital Treasury Payment Voucher...',
+          textTa: 'உங்கள் அரசு கருவூல செலுத்துகை ரசீதை திறக்கிறது...',
+        );
+      }
+      final isPaymentDone = activeToken?.currentStage == ProcurementStageType.paymentCompleted;
+      return VoiceQueryResponse(
         intent: 'PAYMENT_STATUS',
-        textEn: 'Payment Status: ₹46,400 initiated via Direct Benefit Transfer to bank account ending •••• 7821.',
-        textTa: 'பணப்பரிமாற்ற நிலை: Direct Benefit Transfer மூலம் •••• 7821 வங்கிக் கணக்கிற்கு ₹46,400 அனுப்பப்பட்டுள்ளது.',
+        textEn: isPaymentDone
+            ? 'Payment Status: ₹59,160.00 successfully credited to your bank account via Direct Benefit Transfer.'
+            : 'Payment Status: Payout calculation in progress based on recorded scale weighment.',
+        textTa: isPaymentDone
+            ? 'பணப்பரிமாற்ற நிலை: ₹59,160.00 உங்கள் வங்கிக் கணக்கில் வெற்றிகரமாக வரவு வைக்கப்பட்டது.'
+            : 'பணப்பரிமாற்ற நிலை: எடை பதிவின் அடிப்படையில் கணக்கிடப்பட்டு வருகிறது.',
+      );
+    }
+
+    // 4. CROP ACCEPTANCE & QUALITY
+    if (lower.contains('accepted') ||
+        lower.contains('rejected') ||
+        lower.contains('quality') ||
+        lower.contains('moisture') ||
+        lower.contains('pass') ||
+        lower.contains('ஏற்றுக்கொள்ளப்பட்டது') ||
+        lower.contains('நிராகரிப்பு') ||
+        lower.contains('ஈரப்பதம்')) {
+      final isAcc = activeToken != null && activeToken.currentStageIndex >= 5 && activeToken.status != TokenStatus.cancelled;
+      return VoiceQueryResponse(
+        intent: 'CROP_ACCEPTANCE',
+        textEn: isAcc
+            ? 'Crop Status: ACCEPTED (Grade A FAQ Standard). Moisture content verified at 14.2%.'
+            : 'Crop Status: Quality inspection is in progress at Quality Bay #01.',
+        textTa: isAcc
+            ? 'பயிர் நிலை: ஏற்றுக்கொள்ளப்பட்டது (கிரேடு ஏ தரம்). ஈரப்பதம் 14.2% சரிபார்க்கப்பட்டது.'
+            : 'பயிர் நிலை: தர பரிசோதனை நடைபெற்று வருகிறது.',
+      );
+    }
+
+    // 5. VOICE NAVIGATION COMMANDS
+    if (lower.contains('show my token') || lower.contains('show token') || lower.contains('என் டோக்கன்')) {
+      return const VoiceQueryResponse(
+        intent: 'NAVIGATE_TOKEN',
+        textEn: 'Opening your Digital Token E-Pass...',
+        textTa: 'உங்கள் டிஜிட்டல் டோக்கனை திறக்கிறது...',
+      );
+    }
+
+    if (lower.contains('show documents') || lower.contains('show document') || lower.contains('ஆவணங்கள்')) {
+      return const VoiceQueryResponse(
+        intent: 'NAVIGATE_DOCUMENTS',
+        textEn: 'Opening Digital Document Center...',
+        textTa: 'டிஜிட்டல் ஆவணப் பிரிவை திறக்கிறது...',
+      );
+    }
+
+    if (lower.contains('call helpdesk') || lower.contains('call support') || lower.contains('உதவி எண்')) {
+      return const VoiceQueryResponse(
+        intent: 'CALL_HELPDESK',
+        textEn: 'Connecting to Procurement Helpdesk toll-free helpline 1800-425-4673...',
+        textTa: 'கொள்முதல் உதவி மையம் 1800-425-4673 உடன் இணைக்கிறது...',
+      );
+    }
+
+    // 6. MISSED SLOT ASSISTANCE
+    if (lower.contains('missed') || lower.contains('late') || lower.contains('reschedule') || lower.contains('தவறிவிட்டது')) {
+      return const VoiceQueryResponse(
+        intent: 'MISSED_SLOT_ASSIST',
+        textEn: 'Missed Slot Assistance: You can reschedule your booking to the next available slot directly from the app.',
+        textTa: 'தவறிய டோக்கன் உதவி: பயன்பாட்டிலிருந்து நேரடியாக அடுத்த நேர முன்பதிவு செய்யலாம்.',
+      );
+    }
+
+    // 7. SLOT TIME & WHEN TO GO
+    if (lower.contains('when') || lower.contains('time') || lower.contains('slot') || lower.contains('எப்போது')) {
+      final slot = activeToken?.timeSlot ?? '09:00 AM - 11:00 AM';
+      final date = activeToken?.bookingDate ?? 'Today';
+      return VoiceQueryResponse(
+        intent: 'SCHEDULED_SLOT',
+        textEn: 'Your scheduled procurement slot is $date during $slot.',
+        textTa: 'உங்கள் கொள்முதல் நேரம்: $date ($slot).',
       );
     }
 

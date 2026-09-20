@@ -391,4 +391,86 @@ class ApiProcurementProvider implements ProcurementDataProvider {
       return {'success': false, 'error': e.toString()};
     }
   }
+
+  // --- DIGITAL DOCUMENTS API ---
+  Future<List<Map<String, dynamic>>> getDigitalDocuments(String farmerId) async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/documents/$farmerId'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final list = body['data'] as List;
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // --- RESCHEDULE MISSED SLOT API ---
+  Future<Map<String, dynamic>> rescheduleToken({
+    required String farmerId,
+    required String newBookingDate,
+    required String newTimeSlot,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/farmers/token/reschedule'),
+        headers: _headers,
+        body: jsonEncode({
+          'farmerId': farmerId,
+          'newBookingDate': newBookingDate,
+          'newTimeSlot': newTimeSlot,
+        }),
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+    return {'success': false, 'error': 'Failed to reschedule slot'};
+  }
+
+  // --- FARMER FEEDBACK API ---
+  Future<Map<String, dynamic>> submitFarmerFeedback({
+    required String farmerId,
+    required int rating,
+    required String category,
+    required String remarks,
+  }) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/farmers/feedback'),
+        headers: _headers,
+        body: jsonEncode({
+          'farmerId': farmerId,
+          'rating': rating,
+          'category': category,
+          'remarks': remarks,
+        }),
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+    return {'success': false, 'error': 'Failed to submit feedback'};
+  }
+
+  // --- OFFICER FEEDBACK API ---
+  Future<Map<String, dynamic>> getOfficerFeedback() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/officer/feedback'),
+        headers: _headers,
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (_) {}
+    return {'success': false, 'data': [], 'summary': {}};
+  }
 }

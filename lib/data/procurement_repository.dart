@@ -11,6 +11,7 @@ import 'package:farmer_procurement_app/core/models/queue_model.dart';
 import 'package:farmer_procurement_app/core/models/payment_model.dart';
 import 'package:farmer_procurement_app/core/models/procurement_receipt.dart';
 import 'package:farmer_procurement_app/core/models/app_notification.dart';
+import 'package:farmer_procurement_app/core/models/digital_document.dart';
 import 'package:farmer_procurement_app/data/mock_data.dart';
 import 'package:farmer_procurement_app/data/providers/api_procurement_provider.dart';
 
@@ -32,6 +33,7 @@ class ProcurementRepository extends ChangeNotifier {
   bool _isOfficerMode = false;
   bool _isAutoSimulatingQueue = false;
   Timer? _queueSimulationTimer;
+  Timer? _backgroundSyncTimer;
 
   // Network & Sync State
   bool _isOffline = false;
@@ -45,6 +47,8 @@ class ProcurementRepository extends ChangeNotifier {
   late PaymentModel _payment;
   late List<AppNotification> _notifications;
   List<ProcurementReceipt> _receipts = [];
+  List<DigitalDocument> _documents = [];
+  Map<String, dynamic> _officerFeedbackData = {'data': [], 'summary': {}};
   int _currentServingTokenNumber = 101;
 
   void _initDefaults() {
@@ -55,9 +59,25 @@ class ProcurementRepository extends ChangeNotifier {
     _payment = MockData.initialPayment;
     _notifications = List.from(MockData.initialNotifications);
     _receipts = [];
+    _documents = [];
 
-    // Initial sync attempt with API provider
+    // Initial sync attempt with API provider & start background polling
     syncWithBackend();
+    _startBackgroundPolling();
+  }
+
+  void _startBackgroundPolling() {
+    final bindingStr = WidgetsBinding.instance.runtimeType.toString();
+    if (bindingStr.contains('Test')) return;
+    _backgroundSyncTimer?.cancel();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      refreshQueueFromBackend();
+    });
+  }
+
+  void stopBackgroundPolling() {
+    _backgroundSyncTimer?.cancel();
+    _backgroundSyncTimer = null;
   }
 
   late List<Map<String, dynamic>> _procurementRates = [
@@ -81,6 +101,8 @@ class ProcurementRepository extends ChangeNotifier {
 
   List<Map<String, dynamic>> get procurementRates => List.unmodifiable(_procurementRates);
   List<ProcurementReceipt> get receipts => List.unmodifiable(_receipts);
+  List<DigitalDocument> get documents => List.unmodifiable(_documents);
+  Map<String, dynamic> get officerFeedbackData => _officerFeedbackData;
   ProcurementReceipt? get activeReceipt => _receipts.isNotEmpty ? _receipts.first : null;
 
   Future<void> fetchProcurementRates() async {
@@ -101,16 +123,84 @@ class ProcurementRepository extends ChangeNotifier {
         _isOffline = false;
         _lastSyncTime = DateTime.now();
         _syncError = null;
-        notifyListeners();
+      }
+      final activeTok = await _apiProvider.getActiveToken(_currentFarmer.id);
+      if (activeTok != null) {
+        _activeToken = activeTok;
+      }
+      final notifs = await _apiProvider.getNotifications(_currentFarmer.id);
+      if (notifs.isNotEmpty) {
+        _notifications = notifs;
       }
       await fetchProcurementRates();
       await refreshQueueFromBackend();
       await refreshReceiptsFromBackend();
+      await fetchDigitalDocuments();
+      notifyListeners();
     } catch (e) {
       _isOffline = true;
       _syncError = 'Unable to connect to live backend ($e)';
       notifyListeners();
     }
+  }
+
+  Future<void> fetchDigitalDocuments() async {
+    try {
+      final docsJson = await _apiProvider.getDigitalDocuments(_currentFarmer.id);
+      if (docsJson.isNotEmpty) {
+        _documents = docsJson.map((j) => DigitalDocument.fromJson(j)).toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> rescheduleToken(String newDate, String newSlot) async {
+    final res = await _apiProvider.rescheduleToken(
+      farmerId: _currentFarmer.id,
+      newBookingDate: newDate,
+      newTimeSlot: newSlot,
+    );
+    if (res['success'] == true) {
+      if (_activeToken != null) {
+        _activeToken = _activeToken!.copyWith(
+          bookingDate: newDate,
+          timeSlot: newSlot,
+          currentStage: ProcurementStageType.tokenGenerated,
+        );
+      }
+      await syncWithBackend();
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> submitFeedback({
+    required int rating,
+    required String category,
+    required String remarks,
+  }) async {
+    final res = await _apiProvider.submitFarmerFeedback(
+      farmerId: _currentFarmer.id,
+      rating: rating,
+      category: category,
+      remarks: remarks,
+    );
+    if (res['success'] == true) {
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> fetchOfficerFeedback() async {
+    try {
+      final res = await _apiProvider.getOfficerFeedback();
+      if (res['success'] == true) {
+        _officerFeedbackData = res;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshReceiptsFromBackend() async {

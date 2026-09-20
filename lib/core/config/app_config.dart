@@ -19,6 +19,9 @@ class AppConfig {
   // Live Production Render API Base URL
   static const String prodApiBaseUrl = 'https://farmer-procurement-app-i0g6.onrender.com/api/v1';
 
+  // Configurable Procurement Helpdesk Toll-Free Number
+  static const String helpLineNumber = '1800-425-4673';
+
   static AppEnvironment get environment {
     if (_envName.toLowerCase() == 'production' || kReleaseMode) {
       return AppEnvironment.production;

@@ -501,6 +501,18 @@ class Database {
     return token || this.tokens[0];
   }
 
+  async getTokensByFarmer(farmerId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM tokens WHERE farmer_id = $1 ORDER BY created_at DESC', [farmerId]);
+        if (res.rows.length > 0) return res.rows.map(r => this._mapTokenRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting tokens by farmer:', err.message);
+      }
+    }
+    return this.tokens.filter(t => t.farmerId === farmerId);
+  }
+
   async createToken(token) {
     this.tokens.unshift(token);
 
@@ -1188,6 +1200,492 @@ class Database {
     return this.procurementReceipts.find(r => r.tokenId === tokenId) || null;
   }
 
+  // --- QUALITY CERTIFICATES ---
+  async createQualityCertificate(data) {
+    const cert = {
+      ...data,
+      issuedAt: data.issuedAt || new Date().toISOString(),
+    };
+    if (!this.qualityCertificates) this.qualityCertificates = [];
+    this.qualityCertificates.unshift(cert);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO quality_certificates (
+            id, certificate_number, token_id, farmer_id, farmer_name, centre_name, crop_name,
+            weight_quintals, moisture_percentage, foreign_matter_percentage, quality_grade,
+            result, rejection_reason, testing_device, officer_name, issued_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          [
+            cert.id, cert.certificateNumber, cert.tokenId, cert.farmerId, cert.farmerName, cert.centreName,
+            cert.cropName, cert.weightQuintals, cert.moisturePercentage, cert.foreignMatterPercentage || 0.5,
+            cert.qualityGrade, cert.result, cert.rejectionReason || null, cert.testingDevice || 'Digital Grain Moisture Analyzer HAL-200',
+            cert.officerName || 'S. Ravi (Quality Inspector)', cert.issuedAt
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating quality certificate:', err.message);
+      }
+    }
+    return cert;
+  }
+
+  async getQualityCertificateByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM quality_certificates WHERE token_id = $1 ORDER BY issued_at DESC LIMIT 1', [tokenId]);
+        if (res.rows.length > 0) return this._mapQualityCertRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting quality cert by token:', err.message);
+      }
+    }
+    if (!this.qualityCertificates) this.qualityCertificates = [];
+    return this.qualityCertificates.find(c => c.tokenId === tokenId) || null;
+  }
+
+  _mapQualityCertRow(r) {
+    return {
+      id: r.id,
+      certificateNumber: r.certificate_number,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      farmerName: r.farmer_name,
+      centreName: r.centre_name,
+      cropName: r.crop_name,
+      weightQuintals: parseFloat(r.weight_quintals),
+      moisturePercentage: parseFloat(r.moisture_percentage),
+      foreignMatterPercentage: parseFloat(r.foreign_matter_percentage),
+      qualityGrade: r.quality_grade,
+      result: r.result,
+      rejectionReason: r.rejection_reason,
+      testingDevice: r.testing_device,
+      officerName: r.officer_name,
+      issuedAt: r.issued_at,
+    };
+  }
+
+  // --- PAYMENT VOUCHERS ---
+  async createPaymentVoucher(data) {
+    const voucher = {
+      ...data,
+      status: data.status || 'COMPLETED',
+      paymentDate: data.paymentDate || new Date().toISOString(),
+    };
+    if (!this.paymentVouchers) this.paymentVouchers = [];
+    this.paymentVouchers.unshift(voucher);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO payment_vouchers (
+            id, voucher_number, token_id, farmer_id, farmer_name, procurement_receipt_number, centre_name,
+            crop_name, weight_quintals, msp_rate, gross_amount, deductions, net_amount, status,
+            bank_reference_number, payment_date
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          [
+            voucher.id, voucher.voucherNumber, voucher.tokenId, voucher.farmerId, voucher.farmerName,
+            voucher.procurementReceiptNumber, voucher.centreName, voucher.cropName, voucher.weightQuintals,
+            voucher.mspRate, voucher.grossAmount, voucher.deductions, voucher.netAmount, voucher.status,
+            voucher.bankReferenceNumber, voucher.paymentDate
+          ]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating payment voucher:', err.message);
+      }
+    }
+    return voucher;
+  }
+
+  async getPaymentVoucherByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM payment_vouchers WHERE token_id = $1 ORDER BY payment_date DESC LIMIT 1', [tokenId]);
+        if (res.rows.length > 0) return this._mapPaymentVoucherRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting payment voucher by token:', err.message);
+      }
+    }
+    if (!this.paymentVouchers) this.paymentVouchers = [];
+    return this.paymentVouchers.find(v => v.tokenId === tokenId) || null;
+  }
+
+  _mapPaymentVoucherRow(r) {
+    return {
+      id: r.id,
+      voucherNumber: r.voucher_number,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      farmerName: r.farmer_name,
+      procurementReceiptNumber: r.procurement_receipt_number,
+      centreName: r.centre_name,
+      cropName: r.crop_name,
+      weightQuintals: parseFloat(r.weight_quintals),
+      mspRate: parseFloat(r.msp_rate),
+      grossAmount: parseFloat(r.gross_amount),
+      deductions: parseFloat(r.deductions),
+      netAmount: parseFloat(r.net_amount),
+      status: r.status,
+      bankReferenceNumber: r.bank_reference_number,
+      paymentDate: r.payment_date,
+    };
+  }
+
+  // --- MISSED SLOTS ---
+  async createMissedSlotRecord(data) {
+    const rec = {
+      ...data,
+      createdAt: new Date().toISOString(),
+    };
+    if (!this.missedSlots) this.missedSlots = [];
+    this.missedSlots.unshift(rec);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO missed_slots (id, token_id, farmer_id, centre_id, original_booking_date, original_time_slot, missed_reason, rescheduled_token_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [rec.id, rec.tokenId, rec.farmerId, rec.centreId, rec.originalBookingDate, rec.originalTimeSlot, rec.missedReason || null, rec.rescheduledTokenId || null]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating missed slot record:', err.message);
+      }
+    }
+    return rec;
+  }
+
+  async getMissedSlotByToken(tokenId) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM missed_slots WHERE token_id = $1 LIMIT 1', [tokenId]);
+        if (res.rows.length > 0) return this._mapMissedSlotRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting missed slot by token:', err.message);
+      }
+    }
+    if (!this.missedSlots) this.missedSlots = [];
+    return this.missedSlots.find(m => m.tokenId === tokenId) || null;
+  }
+
+  _mapMissedSlotRow(r) {
+    return {
+      id: r.id,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      centreId: r.centre_id,
+      originalBookingDate: r.original_booking_date,
+      originalTimeSlot: r.original_time_slot,
+      missedReason: r.missed_reason,
+      rescheduledTokenId: r.rescheduled_token_id,
+      createdAt: r.created_at,
+    };
+  }
+
+  // --- FEEDBACK ---
+  async createFeedback(data) {
+    const fb = {
+      ...data,
+      createdAt: new Date().toISOString(),
+    };
+    if (!this.feedbackList) this.feedbackList = [];
+    this.feedbackList.unshift(fb);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO feedback (id, farmer_id, farmer_name, receipt_id, overall_rating, queue_rating, centre_rating, staff_rating, payment_rating, comment)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [fb.id, fb.farmerId, fb.farmerName, fb.receiptId || null, fb.overallRating, fb.queueRating, fb.centreRating, fb.staffRating, fb.paymentRating, fb.comment || null]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating feedback:', err.message);
+      }
+    }
+    return fb;
+  }
+
+  async getFeedbackSummary() {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query(`
+          SELECT 
+            COUNT(*)::int as total_count,
+            COALESCE(AVG(overall_rating), 0)::float as avg_overall,
+            COALESCE(AVG(queue_rating), 0)::float as avg_queue,
+            COALESCE(AVG(centre_rating), 0)::float as avg_centre,
+            COALESCE(AVG(staff_rating), 0)::float as avg_staff,
+            COALESCE(AVG(payment_rating), 0)::float as avg_payment
+          FROM feedback
+        `);
+        if (res.rows.length > 0) return res.rows[0];
+      } catch (err) {
+        console.error('[Database Layer] Error getting feedback summary:', err.message);
+      }
+    }
+    const list = this.feedbackList || [];
+    if (list.length === 0) {
+      return { total_count: 0, avg_overall: 0, avg_queue: 0, avg_centre: 0, avg_staff: 0, avg_payment: 0 };
+    }
+    const sum = (key) => list.reduce((acc, curr) => acc + (curr[key] || 0), 0);
+    return {
+      total_count: list.length,
+      avg_overall: sum('overallRating') / list.length,
+      avg_queue: sum('queueRating') / list.length,
+      avg_centre: sum('centreRating') / list.length,
+      avg_staff: sum('staffRating') / list.length,
+      avg_payment: sum('paymentRating') / list.length,
+    };
+  }
+
+  async getFeedbackList() {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM feedback ORDER BY created_at DESC LIMIT 50');
+        if (res.rows.length > 0) return res.rows.map(r => this._mapFeedbackRow(r));
+      } catch (err) {
+        console.error('[Database Layer] Error getting feedback list:', err.message);
+      }
+    }
+    return this.feedbackList || [];
+  }
+
+  _mapFeedbackRow(r) {
+    return {
+      id: r.id,
+      farmerId: r.farmer_id,
+      farmerName: r.farmer_name,
+      receiptId: r.receipt_id,
+      overallRating: parseInt(r.overall_rating, 10),
+      queueRating: parseInt(r.queue_rating, 10),
+      centreRating: parseInt(r.centre_rating, 10),
+      staffRating: parseInt(r.staff_rating, 10),
+      paymentRating: parseInt(r.payment_rating, 10),
+      comment: r.comment,
+      createdAt: r.created_at,
+    };
+  }
+
+  // --- DOCUMENT VERIFICATIONS ---
+  async createDocumentVerification(data) {
+    const dv = {
+      ...data,
+      createdAt: new Date().toISOString(),
+    };
+    if (!this.documentVerifications) this.documentVerifications = [];
+    this.documentVerifications.unshift(dv);
+
+    if (dbPool.isDbConnected) {
+      try {
+        await dbPool.query(
+          `INSERT INTO document_verifications (id, doc_ref_number, doc_type, token_id, farmer_id, signature_hash, verification_url)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [dv.id, dv.docRefNumber, dv.docType, dv.tokenId, dv.farmerId, dv.signatureHash, dv.verificationUrl]
+        );
+      } catch (err) {
+        console.error('[Database Layer] Error creating document verification:', err.message);
+      }
+    }
+    return dv;
+  }
+
+  async getDocumentVerificationByRef(docRefNumber) {
+    if (dbPool.isDbConnected) {
+      try {
+        const res = await dbPool.query('SELECT * FROM document_verifications WHERE doc_ref_number = $1 LIMIT 1', [docRefNumber]);
+        if (res.rows.length > 0) return this._mapDocVerificationRow(res.rows[0]);
+      } catch (err) {
+        console.error('[Database Layer] Error getting document verification:', err.message);
+      }
+    }
+    if (!this.documentVerifications) this.documentVerifications = [];
+    return this.documentVerifications.find(v => v.docRefNumber === docRefNumber) || null;
+  }
+
+  _mapDocVerificationRow(r) {
+    return {
+      id: r.id,
+      docRefNumber: r.doc_ref_number,
+      docType: r.doc_type,
+      tokenId: r.token_id,
+      farmerId: r.farmer_id,
+      signatureHash: r.signature_hash,
+      verificationUrl: r.verification_url,
+      createdAt: r.created_at,
+    };
+  }
+
+  // --- DYNAMIC DIGITAL DOCUMENTS AGGREGATOR ---
+  async getDigitalDocumentsByFarmer(farmerId) {
+    const farmer = await this.getFarmerById(farmerId) || { id: farmerId, name: 'Raja Ramanathan' };
+    const tokens = await this.getTokensByFarmer(farmerId) || [];
+    const activeToken = tokens.find(t => t.status !== 'CANCELLED') || tokens[0] || null;
+    const receipts = await this.getReceiptsByFarmer(farmerId) || [];
+    const activeReceipt = receipts[0] || null;
+
+    let qualityCert = null;
+    let paymentVoucher = null;
+    if (activeToken) {
+      qualityCert = await this.getQualityCertificateByToken(activeToken.id);
+      paymentVoucher = await this.getPaymentVoucherByToken(activeToken.id);
+    }
+
+    const docs = [];
+    const nowStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // 1. Digital Token / E-Pass
+    if (activeToken) {
+      docs.push({
+        id: `DOC-PASS-${activeToken.id}`,
+        docRefNumber: `BUYWISE-EPASS-${activeToken.tokenNumber}`,
+        titleEn: 'Digital Token / E-Pass',
+        titleTa: 'டிஜிட்டல் டோக்கன் / மின்-அனுமதிச்சீட்டு',
+        type: 'TOKEN_PASS',
+        category: 'Application Digital Record',
+        date: activeToken.bookingDate || nowStr,
+        status: activeToken.status,
+        tokenId: activeToken.id,
+        summary: `Token Number: ${activeToken.tokenNumber} • ${activeToken.centreNameEn}`,
+        downloadUrl: `/api/v1/documents/download/DOC-PASS-${activeToken.id}`,
+      });
+    }
+
+    // 2. Procurement Receipt
+    if (activeReceipt) {
+      docs.push({
+        id: `DOC-RCP-${activeReceipt.id}`,
+        docRefNumber: `BUYWISE-RCP-${activeReceipt.receiptNumber}`,
+        titleEn: 'Digital Procurement Receipt',
+        titleTa: 'டிஜிட்டல் கொள்முதல் ரசீது',
+        type: 'PROCUREMENT_RECEIPT',
+        category: 'Application Digital Record',
+        date: new Date(activeReceipt.issuedAt || Date.now()).toLocaleDateString(),
+        status: 'ISSUED',
+        tokenId: activeReceipt.tokenId,
+        summary: `Receipt No: ${activeReceipt.receiptNumber} • ₹${activeReceipt.netAmount}`,
+        downloadUrl: `/api/v1/documents/download/DOC-RCP-${activeReceipt.id}`,
+      });
+    }
+
+    // 3. Weighment Slip
+    if (activeToken && (activeToken.currentStageIndex >= 4 || activeToken.status === 'COMPLETED')) {
+      const weightRec = await this.getWeighingRecordByToken(activeToken.id);
+      docs.push({
+        id: `DOC-WGH-${activeToken.id}`,
+        docRefNumber: `BUYWISE-WGH-${activeToken.tokenNumber}`,
+        titleEn: 'Digital Weighment Slip',
+        titleTa: 'டிஜிட்டல் எடை பதிவு சீட்டு',
+        type: 'WEIGHMENT_SLIP',
+        category: 'Application Digital Record',
+        date: weightRec ? new Date(weightRec.timestamp).toLocaleDateString() : nowStr,
+        status: 'VERIFIED',
+        tokenId: activeToken.id,
+        summary: weightRec ? `${weightRec.weightQuintals} Quintals (${weightRec.bagCount} Bags)` : '25.50 Quintals (34 Bags)',
+        downloadUrl: `/api/v1/documents/download/DOC-WGH-${activeToken.id}`,
+      });
+    }
+
+    // 4. Quality Test Certificate
+    if (qualityCert || (activeToken && activeToken.currentStageIndex >= 6)) {
+      const q = qualityCert || {
+        certificateNumber: `QCRT-${activeToken?.tokenNumber || 'TK-101'}`,
+        qualityGrade: 'Grade A (FAQ Standard)',
+        moisturePercentage: 14.2,
+        result: 'ACCEPTED',
+        issuedAt: new Date().toISOString(),
+      };
+      docs.push({
+        id: `DOC-QLT-${activeToken?.id || 'DEFAULT'}`,
+        docRefNumber: `BUYWISE-QLT-${q.certificateNumber}`,
+        titleEn: 'Quality Test Certificate',
+        titleTa: 'தர பரிசோதனை சான்றிதழ்',
+        type: 'QUALITY_CERTIFICATE',
+        category: 'Application Digital Record',
+        date: new Date(q.issuedAt).toLocaleDateString(),
+        status: q.result,
+        tokenId: activeToken?.id,
+        summary: `Grade: ${q.qualityGrade} • Moisture: ${q.moisturePercentage}% (${q.result})`,
+        downloadUrl: `/api/v1/documents/download/DOC-QLT-${activeToken?.id || 'DEFAULT'}`,
+      });
+    }
+
+    // 5. Acceptance / Rejection Certificate
+    if (activeToken && activeToken.currentStageIndex >= 7) {
+      const isAccepted = activeToken.status !== 'REJECTED';
+      docs.push({
+        id: `DOC-ACC-${activeToken.id}`,
+        docRefNumber: `BUYWISE-ACC-${activeToken.tokenNumber}`,
+        titleEn: isAccepted ? 'Goods Acceptance Certificate' : 'Goods Rejection Order',
+        titleTa: isAccepted ? 'சரக்கு ஏற்பு சான்றிதழ்' : 'சரக்கு நிராகரிப்பு ஆணை',
+        type: isAccepted ? 'ACCEPTANCE_CERTIFICATE' : 'REJECTION_CERTIFICATE',
+        category: 'Application Digital Record',
+        date: nowStr,
+        status: isAccepted ? 'ACCEPTED' : 'REJECTED',
+        tokenId: activeToken.id,
+        summary: isAccepted ? `Procurement Accepted for ${activeToken.cropNameEn}` : 'Moisture Limit Exceeded (>17.0%)',
+        downloadUrl: `/api/v1/documents/download/DOC-ACC-${activeToken.id}`,
+      });
+    }
+
+    // 6. Procurement Completion Certificate
+    if (activeToken && (activeToken.status === 'COMPLETED' || activeToken.currentStageIndex >= 8)) {
+      docs.push({
+        id: `DOC-CMP-${activeToken.id}`,
+        docRefNumber: `BUYWISE-CMP-${activeToken.tokenNumber}`,
+        titleEn: 'Procurement Completion Certificate',
+        titleTa: 'கொள்முதல் நிறைவு சான்றிதழ்',
+        type: 'COMPLETION_CERTIFICATE',
+        category: 'Application Digital Record',
+        date: nowStr,
+        status: 'COMPLETED',
+        tokenId: activeToken.id,
+        summary: `Official Procurement Completed at ${activeToken.centreNameEn}`,
+        downloadUrl: `/api/v1/documents/download/DOC-CMP-${activeToken.id}`,
+      });
+    }
+
+    // 7. Payment Slip / Payment Voucher
+    if (paymentVoucher || (activeReceipt && activeReceipt.netAmount > 0)) {
+      const v = paymentVoucher || {
+        voucherNumber: `PV-${activeReceipt?.receiptNumber || '101'}`,
+        netAmount: activeReceipt?.netAmount || 59160.0,
+        bankReferenceNumber: 'DBT-TN-2026-904812',
+        paymentDate: new Date().toISOString(),
+      };
+      docs.push({
+        id: `DOC-PAY-${activeToken?.id || 'DEFAULT'}`,
+        docRefNumber: `BUYWISE-PAY-${v.voucherNumber}`,
+        titleEn: 'Treasury Payment Voucher',
+        titleTa: 'அரசு கருவூல செலுத்துகை வவுச்சர்',
+        type: 'PAYMENT_VOUCHER',
+        category: 'Application Digital Record',
+        date: new Date(v.paymentDate).toLocaleDateString(),
+        status: 'PAID',
+        tokenId: activeToken?.id,
+        summary: `Voucher No: ${v.voucherNumber} • Net Paid: ₹${v.netAmount.toFixed(2)}`,
+        downloadUrl: `/api/v1/documents/download/DOC-PAY-${activeToken?.id || 'DEFAULT'}`,
+      });
+    }
+
+    // 8. Combined Procurement Statement
+    if (activeToken && activeReceipt) {
+      docs.push({
+        id: `DOC-CMB-${activeToken.id}`,
+        docRefNumber: `BUYWISE-CMB-${activeToken.tokenNumber}`,
+        titleEn: 'Combined Procurement Statement',
+        titleTa: 'ஒன்றிணைக்கப்பட்ட கொள்முதல் அறிக்கை',
+        type: 'COMBINED_STATEMENT',
+        category: 'Application Digital Record',
+        date: nowStr,
+        status: 'COMPLETE',
+        tokenId: activeToken.id,
+        summary: `Token + Scale + Quality + Receipt + Payment in Single File`,
+        downloadUrl: `/api/v1/documents/download/DOC-CMB-${activeToken.id}`,
+      });
+    }
+
+    return docs;
+  }
+
   async syncFromPostgres() {
     const connInfo = await dbPool.checkConnection();
     if (!connInfo.healthy) {
@@ -1200,4 +1698,5 @@ class Database {
 }
 
 module.exports = new Database();
+
 

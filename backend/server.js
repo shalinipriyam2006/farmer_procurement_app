@@ -12,6 +12,7 @@ const officerRoutes = require('./routes/officer');
 const grievanceRoutes = require('./routes/grievance');
 const documentRoutes = require('./routes/document');
 const eventRoutes = require('./routes/events');
+const verifyRoutes = require('./routes/verify');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/v1/officer', officerRoutes);
 app.use('/api/v1/grievances', grievanceRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/verify', verifyRoutes);
 
 // Database-Aware Healthcheck Endpoint
 app.get('/api/v1/health', async (req, res) => {

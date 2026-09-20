@@ -243,6 +243,86 @@ CREATE TABLE IF NOT EXISTS procurement_receipts (
     document_url TEXT
 );
 
+-- 18. Quality Certificates Table
+CREATE TABLE IF NOT EXISTS quality_certificates (
+    id VARCHAR(64) PRIMARY KEY,
+    certificate_number VARCHAR(100) UNIQUE NOT NULL,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    farmer_name VARCHAR(255) NOT NULL,
+    centre_name VARCHAR(255) NOT NULL,
+    crop_name VARCHAR(100) NOT NULL,
+    weight_quintals DOUBLE PRECISION NOT NULL,
+    moisture_percentage DOUBLE PRECISION NOT NULL,
+    foreign_matter_percentage DOUBLE PRECISION DEFAULT 0.5,
+    quality_grade VARCHAR(100) NOT NULL,
+    result VARCHAR(30) NOT NULL,
+    rejection_reason TEXT,
+    testing_device VARCHAR(100) DEFAULT 'Digital Grain Moisture Analyzer HAL-200',
+    officer_name VARCHAR(255) DEFAULT 'S. Ravi (Quality Inspector)',
+    issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. Payment Vouchers Table
+CREATE TABLE IF NOT EXISTS payment_vouchers (
+    id VARCHAR(64) PRIMARY KEY,
+    voucher_number VARCHAR(100) UNIQUE NOT NULL,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    farmer_name VARCHAR(255) NOT NULL,
+    procurement_receipt_number VARCHAR(100) NOT NULL,
+    centre_name VARCHAR(255) NOT NULL,
+    crop_name VARCHAR(100) NOT NULL,
+    weight_quintals DOUBLE PRECISION NOT NULL,
+    msp_rate DOUBLE PRECISION NOT NULL,
+    gross_amount DOUBLE PRECISION NOT NULL,
+    deductions DOUBLE PRECISION NOT NULL,
+    net_amount DOUBLE PRECISION NOT NULL,
+    status VARCHAR(30) DEFAULT 'COMPLETED',
+    bank_reference_number VARCHAR(100) NOT NULL,
+    payment_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 20. Missed Slots Table
+CREATE TABLE IF NOT EXISTS missed_slots (
+    id VARCHAR(64) PRIMARY KEY,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    centre_id VARCHAR(64) REFERENCES procurement_centres(id),
+    original_booking_date VARCHAR(50) NOT NULL,
+    original_time_slot VARCHAR(100) NOT NULL,
+    missed_reason TEXT DEFAULT 'Farmer did not arrive within scheduled window.',
+    rescheduled_token_id VARCHAR(64),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 21. Feedback Table
+CREATE TABLE IF NOT EXISTS feedback (
+    id VARCHAR(64) PRIMARY KEY,
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    farmer_name VARCHAR(255) NOT NULL,
+    receipt_id VARCHAR(64),
+    overall_rating INTEGER NOT NULL CHECK (overall_rating BETWEEN 1 AND 5),
+    queue_rating INTEGER NOT NULL CHECK (queue_rating BETWEEN 1 AND 5),
+    centre_rating INTEGER NOT NULL CHECK (centre_rating BETWEEN 1 AND 5),
+    staff_rating INTEGER NOT NULL CHECK (staff_rating BETWEEN 1 AND 5),
+    payment_rating INTEGER NOT NULL CHECK (payment_rating BETWEEN 1 AND 5),
+    comment TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 22. Document Verifications Table
+CREATE TABLE IF NOT EXISTS document_verifications (
+    id VARCHAR(64) PRIMARY KEY,
+    doc_ref_number VARCHAR(100) UNIQUE NOT NULL,
+    doc_type VARCHAR(50) NOT NULL,
+    token_id VARCHAR(64) REFERENCES tokens(id),
+    farmer_id VARCHAR(64) REFERENCES farmers(id),
+    signature_hash VARCHAR(255) NOT NULL,
+    verification_url TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indices for Production Query Performance
 CREATE INDEX IF NOT EXISTS idx_farmers_mobile ON farmers(mobile_number);
 CREATE INDEX IF NOT EXISTS idx_tokens_farmer ON tokens(farmer_id);
@@ -254,4 +334,9 @@ CREATE INDEX IF NOT EXISTS idx_weighing_token ON weighing_records(token_id);
 CREATE INDEX IF NOT EXISTS idx_quality_token ON quality_records(token_id);
 CREATE INDEX IF NOT EXISTS idx_status_history_token ON procurement_status_history(token_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_farmer ON procurement_receipts(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_quality_certs_token ON quality_certificates(token_id);
+CREATE INDEX IF NOT EXISTS idx_payment_vouchers_token ON payment_vouchers(token_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_farmer ON feedback(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_doc_verifications_ref ON document_verifications(doc_ref_number);
+
 

@@ -490,7 +490,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
 
                 const SizedBox(height: 18),
 
-                // 3. Audit Trail Section
+                // 3. Audit Trail Section                // Officer Audit Log Card
                 Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
@@ -545,6 +545,90 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                               ],
                             );
                           },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // Farmer Feedback & Satisfaction Metrics Card
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: const BorderSide(color: AppColors.divider),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.star_rate_rounded, color: Colors.amber, size: 24),
+                            const SizedBox(width: 8),
+                            Text(
+                              isTamil ? 'விவசாயி கருத்துகள் & திருப்தி நிலை' : 'Farmer Satisfaction & Feedback Metrics',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.amber.shade300),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    repo.officerFeedbackData['summary']?['averageRating']?.toString() ?? '4.8',
+                                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.amber),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: List.generate(5, (_) => const Icon(Icons.star_rounded, size: 14, color: Colors.amber)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${repo.officerFeedbackData['summary']?['totalCount'] ?? 12} ${isTamil ? "மதிப்பீடுகள்" : "ratings"}',
+                                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isTamil ? 'சமீபத்திய கருத்துக்கள்:' : 'Recent Farmer Reviews:',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    isTamil
+                                        ? '• "எடை சரிபார்ப்பு மிக வேகமாகவும் துல்லியமாகவும் இருந்தது."'
+                                        : '• "Weighbridge clearance was smooth and fast."',
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black54),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isTamil
+                                        ? '• "தர சான்றிதழ் உடனடி சரிபார்ப்புடன் கிடைத்தது."'
+                                        : '• "Instant digital quality certification was great."',
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
