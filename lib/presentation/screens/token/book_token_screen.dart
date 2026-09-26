@@ -122,7 +122,9 @@ class _BookTokenScreenState extends State<BookTokenScreen> {
         );
         final isClosed = selectedCenter.status.toUpperCase() == 'CLOSED';
 
-        return SingleChildScrollView(
+        return Material(
+          color: AppColors.background,
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -411,8 +413,9 @@ class _BookTokenScreenState extends State<BookTokenScreen> {
               ),
             ],
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 }
