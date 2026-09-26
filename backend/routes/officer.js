@@ -43,8 +43,13 @@ router.post('/queue/call-next', async (req, res) => {
 
 // POST /api/v1/officer/procurement/update
 router.post('/procurement/update', async (req, res) => {
-  const { stageIndex, remark, quintals, bags } = req.body;
-  const updatedToken = await db.updateTokenStage('TOKEN-2026-104', stageIndex, quintals, bags);
+  const { tokenId, farmerId, stageIndex, remark, quintals, bags } = req.body;
+  let targetTokenId = tokenId;
+  if (!targetTokenId) {
+    const tok = await db.getTokenByFarmerId(farmerId || 'FARMER-001');
+    targetTokenId = tok ? tok.id : 'TOKEN-2026-104';
+  }
+  const updatedToken = await db.updateTokenStage(targetTokenId, stageIndex, quintals, bags);
 
   await db.logAudit('OFFICER-101', 'UPDATE_STAGE', `Updated stage index to ${stageIndex} with remark: ${remark || 'N/A'}`);
 

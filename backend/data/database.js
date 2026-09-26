@@ -462,15 +462,27 @@ class Database {
 
   // --- TOKENS ---
   async getTokenById(tokenId) {
+    let token = null;
     if (dbPool.isDbConnected) {
       try {
         const res = await dbPool.query('SELECT * FROM tokens WHERE id = $1', [tokenId]);
-        if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+        if (res.rows.length > 0) token = this._mapTokenRow(res.rows[0]);
       } catch (err) {
         console.error('[Database Layer] Error getting token by ID:', err.message);
       }
     }
-    return this.tokens.find(t => t.id === tokenId) || this.tokens[0];
+    if (!token) {
+      token = this.tokens.find(t => t.id === tokenId) || this.tokens[0];
+    }
+    if (token) {
+      const weighingRecord = await this.getWeighingRecordByToken(token.id);
+      const qualityRecord = await this.getQualityRecordByToken(token.id);
+      const statusHistory = await this.getStatusHistoryByToken(token.id);
+      token.weighingRecord = weighingRecord;
+      token.qualityRecord = qualityRecord;
+      token.statusHistory = statusHistory;
+    }
+    return token;
   }
 
   async getTokenByNumber(tokenNumber) {
@@ -486,19 +498,30 @@ class Database {
   }
 
   async getTokenByFarmerId(farmerId) {
+    let token = null;
     if (dbPool.isDbConnected) {
       try {
         const res = await dbPool.query(
           'SELECT * FROM tokens WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1',
           [farmerId]
         );
-        if (res.rows.length > 0) return this._mapTokenRow(res.rows[0]);
+        if (res.rows.length > 0) token = this._mapTokenRow(res.rows[0]);
       } catch (err) {
         console.error('[Database Layer] Error getting token by farmer:', err.message);
       }
     }
-    let token = this.tokens.find(t => t.farmerId === farmerId);
-    return token || this.tokens[0];
+    if (!token) {
+      token = this.tokens.find(t => t.farmerId === farmerId) || this.tokens[0];
+    }
+    if (token) {
+      const weighingRecord = await this.getWeighingRecordByToken(token.id);
+      const qualityRecord = await this.getQualityRecordByToken(token.id);
+      const statusHistory = await this.getStatusHistoryByToken(token.id);
+      token.weighingRecord = weighingRecord;
+      token.qualityRecord = qualityRecord;
+      token.statusHistory = statusHistory;
+    }
+    return token;
   }
 
   async getTokensByFarmer(farmerId) {
@@ -547,16 +570,13 @@ class Database {
     
     const stageStatusMap = {
       0: 'GENERATED',
-      1: 'CALLED',
-      2: 'WAITING',
-      3: 'PROCESSING',
-      4: 'PROCESSING',
-      5: 'PROCESSING',
-      6: 'PROCESSING',
-      7: status || 'PROCESSING',
-      8: 'COMPLETED',
-      9: 'PROCESSING',
-      10: 'COMPLETED'
+      1: 'ARRIVED_AT_CENTRE',
+      2: 'CALLED',
+      3: 'WEIGHING_COMPLETED',
+      4: 'QUALITY_COMPLETED',
+      5: 'ACCEPTED',
+      6: 'PAYMENT_PROCESSING',
+      7: 'PAYMENT_COMPLETED'
     };
     const finalStatus = status || stageStatusMap[stageIndex] || tokenMem.status;
     tokenMem.status = finalStatus;

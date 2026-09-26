@@ -48,9 +48,9 @@ class ProcurementEventService {
     if (token) {
       const fromStatus = token.status;
       token.status = 'CALLED';
-      token.currentStageIndex = 1;
+      token.currentStageIndex = 3;
 
-      await db.updateTokenStage(token.id, 1, token.estimatedQuintals, token.estimatedBags, 'CALLED');
+      await db.updateTokenStage(token.id, 3, token.estimatedQuintals, token.estimatedBags, 'CALLED');
 
       await db.recordStatusHistory({
         id: `HIST-${Date.now()}`,
@@ -137,7 +137,7 @@ class ProcurementEventService {
     });
 
     const fromStatus = token.status;
-    await db.updateTokenStage(token.id, 4, wQuintals, bCount);
+    await db.updateTokenStage(token.id, 4, wQuintals, bCount, 'WEIGHING_COMPLETED');
 
     await db.recordStatusHistory({
       id: `HIST-${Date.now()}`,
@@ -158,10 +158,10 @@ class ProcurementEventService {
     await db.createNotification({
       id: `NOTIF-${Date.now()}`,
       farmerId: token.farmerId,
-      titleEn: `Weighment Recorded: ${wQuintals} Quintals`,
-      titleTa: `எடை பதிவு செய்யப்பட்டது: ${wQuintals} க்விண்டால்`,
-      messageEn: `Scale ${deviceId} recorded ${bCount} bags (${wQuintals} Qtl). Gross Payout calculated: ₹${netAmount.toFixed(2)}.`,
-      messageTa: `எடை மேடை ${deviceId} மூலம் ${bCount} மூட்டைகள் (${wQuintals} க்விண்டால்) பதிவு செய்யப்பட்டது. தொகை: ₹${netAmount.toFixed(2)}.`
+      titleEn: `Weighing completed. Recorded weight: ${wKg} kg`,
+      titleTa: `எடை நிறைவடைந்தது. பதிவு செய்யப்பட்ட எடை: ${wKg} கிலோ`,
+      messageEn: `Weighing completed. Recorded weight: ${wKg} kg (${bCount} bags, ${wQuintals} Qtl). Gross Payout calculated: ₹${netAmount.toFixed(2)}.`,
+      messageTa: `எடை பதிவு செய்யப்பட்டது. பதிவு செய்யப்பட்ட எடை: ${wKg} கிலோ (${bCount} மூட்டைகள்).`
     });
 
     await db.logAudit(deviceId, 'WEIGHING_COMPLETED', `Digital scale recorded ${wQuintals} Qtl (${bCount} bags) for ${token.tokenNumber}`);
@@ -255,10 +255,10 @@ class ProcurementEventService {
     await db.createNotification({
       id: `NOTIF-${Date.now()}`,
       farmerId: token.farmerId,
-      titleEn: `Quality Check Completed: ${grade}`,
-      titleTa: `தர பரிசோதனை முடிந்தது: ${grade}`,
-      messageEn: `Moisture content: ${moisture}%. Status: ${isAccepted ? 'PASSED (Grade A)' : 'REJECTED'}.`,
-      messageTa: `ஈரப்பதம்: ${moisture}%. நிலை: ${isAccepted ? 'தேர்ச்சி பெற்றார்' : 'நிராகரிக்கப்பட்டது'}.`
+      titleEn: `Quality check completed. Procurement status updated.`,
+      titleTa: `தர பரிசோதனை முடிந்தது. கொள்முதல் நிலை புதுப்பிக்கப்பட்டது.`,
+      messageEn: `Quality check completed. Procurement status updated. Moisture content: ${moisture}%. Status: ${isAccepted ? 'PASSED (Grade A)' : 'REJECTED'}.`,
+      messageTa: `தர பரிசோதனை முடிந்தது. கொள்முதல் நிலை புதுப்பிக்கப்பட்டது. ஈரப்பதம்: ${moisture}%.`
     });
 
     // Auto-advance to ACCEPTED or REJECTED
@@ -277,7 +277,7 @@ class ProcurementEventService {
       id: `HIST-${Date.now()}`,
       tokenId: token.id,
       farmerId: token.farmerId,
-      fromStatus: 'QUALITY_COMPLETED',
+      fromStatus: 'WEIGHING_COMPLETED',
       toStatus: 'ACCEPTED',
       triggerEvent: 'PROCUREMENT_ACCEPTED',
       triggeredBy: 'AUTO_QUALITY_RULE'
@@ -286,14 +286,41 @@ class ProcurementEventService {
     await db.createNotification({
       id: `NOTIF-${Date.now()}`,
       farmerId: token.farmerId,
-      titleEn: `Produce Accepted: ${token.tokenNumber}`,
-      titleTa: `நெல் கொள்முதல் ஏற்றுக்கொள்ளப்பட்டது: ${token.tokenNumber}`,
-      messageEn: `Your produce has met all government FAQ quality standards and has been ACCEPTED.`,
-      messageTa: `உங்கள் நெல் அனைத்து அரசு தர நெறிமுறைகளையும் பூர்த்தி செய்து ஏற்றுக்கொள்ளப்பட்டது.`
+      titleEn: `Quality check completed. Procurement status updated.`,
+      titleTa: `தர பரிசோதனை முடிந்தது. கொள்முதல் நிலை புதுப்பிக்கப்பட்டது.`,
+      messageEn: `Quality check completed. Procurement status updated.`,
+      messageTa: `தர பரிசோதனை முடிந்தது. கொள்முதல் நிலை புதுப்பிக்கப்பட்டது.`
     });
 
-    // Trigger complete & receipt generation
-    return await this._handleProcurementCompleted({ token, qualRecord, weightQuintals, bagCount });
+    const wQuintals = weightQuintals || 22.61;
+    const bCount = bagCount || 45;
+    const mspRate = 2320.0;
+    const deductions = 450.0;
+    const grossAmount = wQuintals * mspRate;
+    const netAmount = grossAmount - deductions;
+    const receiptNum = `PR-TN-2026-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const receipt = await db.createProcurementReceipt({
+      id: `RCPT-${Date.now()}`,
+      receiptNumber: receiptNum,
+      tokenId: token.id,
+      farmerId: token.farmerId,
+      farmerName: token.farmerName,
+      centreId: token.centreId,
+      centreName: token.centreNameEn,
+      cropName: token.cropNameEn,
+      weightQuintals: wQuintals,
+      bagCount: bCount,
+      qualityGrade: qualRecord ? qualRecord.qualityGrade : 'Grade A (FAQ Standard)',
+      moisturePercentage: qualRecord ? qualRecord.moisturePercentage : 14.2,
+      applicableRate: mspRate,
+      grossAmount,
+      deductions,
+      netAmount
+    });
+
+    // Auto-advance to procurement completion & payment processing
+    return await this._handleProcurementCompleted({ token, qualRecord });
   }
 
   // 6. PROCUREMENT_REJECTED
@@ -507,12 +534,19 @@ class ProcurementEventService {
       foreignMatterPercentage: qualData.foreignMatterPercentage
     });
 
+    const token = qualRes.token || await db.getTokenByFarmerId(farmerId);
+    const weightQuintals = weighRes.weighRecord ? weighRes.weighRecord.weightQuintals : 22.61;
+    const bagCount = weighRes.weighRecord ? weighRes.weighRecord.bagCount : 45;
+
+    const acceptRes = await this._handleProcurementAccepted({ token, qualRecord: qualRes.qualRecord, weightQuintals, bagCount });
+
     return {
       success: true,
       flow: 'FULL_SIMULATED_HARDWARE_FLOW',
       tokenCalled: callRes,
       weighing: weighRes,
-      quality: qualRes
+      quality: qualRes,
+      accepted: acceptRes
     };
   }
 }

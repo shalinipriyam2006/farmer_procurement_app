@@ -70,8 +70,8 @@ class ProcurementRepository extends ChangeNotifier {
     final bindingStr = WidgetsBinding.instance.runtimeType.toString();
     if (bindingStr.contains('Test')) return;
     _backgroundSyncTimer?.cancel();
-    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      refreshQueueFromBackend();
+    _backgroundSyncTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      syncWithBackend();
     });
   }
 
@@ -127,6 +127,9 @@ class ProcurementRepository extends ChangeNotifier {
       final activeTok = await _apiProvider.getActiveToken(_currentFarmer.id);
       if (activeTok != null) {
         _activeToken = activeTok;
+        if (activeTok.stageTimestamps.isNotEmpty) {
+          _stageTimestamps.addAll(activeTok.stageTimestamps);
+        }
       }
       final notifs = await _apiProvider.getNotifications(_currentFarmer.id);
       if (notifs.isNotEmpty) {
@@ -242,7 +245,24 @@ class ProcurementRepository extends ChangeNotifier {
       bagCount: bagCount,
       farmerId: _currentFarmer.id,
     );
+
+    final tokenJson = res['result']?['token'];
+    if (tokenJson != null && tokenJson is Map<String, dynamic>) {
+      _activeToken = TokenModel.fromJson(tokenJson);
+    } else if (_activeToken != null) {
+      final wQuintals = (weightKg * bagCount) / 100.0;
+      _activeToken = _activeToken!.copyWith(
+        currentStage: ProcurementStageType.qualityCheck,
+        recordedWeightKg: weightKg,
+        recordedQuintals: wQuintals,
+        recordedBags: bagCount,
+        estimatedQuintals: wQuintals,
+        estimatedBags: bagCount,
+      );
+    }
+
     await syncWithBackend();
+    notifyListeners();
     return res;
   }
 
@@ -251,17 +271,60 @@ class ProcurementRepository extends ChangeNotifier {
       moisturePercentage: moisturePercentage,
       farmerId: _currentFarmer.id,
     );
+
+    final tokenJson = res['result']?['token'];
+    if (tokenJson != null && tokenJson is Map<String, dynamic>) {
+      _activeToken = TokenModel.fromJson(tokenJson);
+    } else if (_activeToken != null) {
+      _activeToken = _activeToken!.copyWith(
+        currentStage: ProcurementStageType.paymentCompleted,
+        qualityStatus: moisturePercentage <= 17.0 ? 'ACCEPTED' : 'REJECTED',
+        qualityGrade: 'Grade A FAQ Standard',
+        moisturePercentage: moisturePercentage,
+      );
+    }
+
     await syncWithBackend();
+    notifyListeners();
     return res;
   }
 
   Future<Map<String, dynamic>> runSimulatorAutoFlow({double customWeightKg = 50.25, double customMoisture = 14.2}) async {
+    // 1. Step 1: Execute Weighing Event (Stage 3)
+    await runSimulatorScale(weightKg: customWeightKg, bagCount: 45);
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // 2. Step 2: Execute Quality Sensor Event (Stage 4)
+    await runSimulatorQuality(moisturePercentage: customMoisture);
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // 3. Step 3: Complete remaining pipeline via backend (Accepted -> Payment, Stages 5..7)
     final res = await _apiProvider.runSimulatorAutoFlow(
       customWeightKg: customWeightKg,
       customMoisture: customMoisture,
       farmerId: _currentFarmer.id,
     );
+
+    final tokenJson = res['result']?['accepted']?['token'] ?? res['result']?['token'];
+    if (tokenJson != null && tokenJson is Map<String, dynamic>) {
+      _activeToken = TokenModel.fromJson(tokenJson);
+    } else if (_activeToken != null) {
+      final wQuintals = (customWeightKg * 45) / 100.0;
+      _activeToken = _activeToken!.copyWith(
+        currentStage: ProcurementStageType.paymentCompleted,
+        recordedWeightKg: customWeightKg,
+        recordedQuintals: wQuintals,
+        recordedBags: 45,
+        estimatedQuintals: wQuintals,
+        estimatedBags: 45,
+        qualityStatus: 'ACCEPTED',
+        qualityGrade: 'Grade A FAQ Standard',
+        moisturePercentage: customMoisture,
+      );
+    }
+
     await syncWithBackend();
+    notifyListeners();
     return res;
   }
 
@@ -554,6 +617,34 @@ class ProcurementRepository extends ChangeNotifier {
     final stages = ProcurementStageType.values;
     final currentIndex = stages.indexOf(currentStage);
 
+    final tok = _activeToken;
+
+    final String weighingDescEn = tok?.recordedWeightKg != null
+        ? 'Recorded Weight: ${tok!.recordedWeightKg} kg'
+        : (tok != null && tok.estimatedQuintals > 0
+            ? 'Recorded Weight: ${(tok.estimatedQuintals * 100).toStringAsFixed(2)} kg (${tok.estimatedQuintals} Qtl, ${tok.estimatedBags} bags)'
+            : 'Electronic weighment completed. Gross and tare recorded.');
+
+    final String weighingDescTa = tok?.recordedWeightKg != null
+        ? 'பதிவு செய்யப்பட்ட எடை: ${tok!.recordedWeightKg} கிலோ'
+        : (tok != null && tok.estimatedQuintals > 0
+            ? 'பதிவு செய்யப்பட்ட எடை: ${(tok.estimatedQuintals * 100).toStringAsFixed(2)} கிலோ (${tok.estimatedQuintals} க்விண்டால், ${tok.estimatedBags} மூட்டைகள்)'
+            : 'எலக்ட்ரானிக் எடை சரிபார்க்கப்பட்டது. மூட்டை எடை பதிவு செய்யப்பட்டது.');
+
+    final String weighingRemark = tok?.recordedWeightKg != null
+        ? 'Recorded Weight: ${tok!.recordedWeightKg} kg'
+        : (tok != null && tok.estimatedQuintals > 0
+            ? 'Recorded Weight: ${(tok.estimatedQuintals * 100).toStringAsFixed(2)} kg'
+            : 'Scale Verified: 45 Bags / 29.7 Qtl');
+
+    final String qualStatus = tok?.qualityStatus ?? 'Accepted';
+    final String qualGrade = tok?.qualityGrade ?? 'Grade A FAQ';
+    final double qualMoisture = tok?.moisturePercentage ?? 14.2;
+
+    final String qualityDescEn = 'Quality Result: $qualStatus ($qualGrade, Moisture: $qualMoisture%)';
+    final String qualityDescTa = 'தர முடிவு: ${qualStatus == "ACCEPTED" ? "ஏற்றுக்கொள்ளப்பட்டது" : qualStatus} ($qualGrade, ஈரப்பதம்: $qualMoisture%)';
+    final String qualityRemark = 'Quality Result: $qualStatus ($qualGrade)';
+
     final stageMeta = {
       ProcurementStageType.tokenGenerated: {
         'en': 'Token issued via mobile portal. Scheduled slot allotted.',
@@ -577,18 +668,18 @@ class ProcurementRepository extends ChangeNotifier {
         'defaultRemark': 'Called to Weighbridge Bay 2',
       },
       ProcurementStageType.weighing: {
-        'en': 'Electronic weighment completed. Gross and tare recorded.',
-        'ta': 'எலக்ட்ரானிக் எடை சரிபார்க்கப்பட்டது. மூட்டை எடை பதிவு செய்யப்பட்டது.',
+        'en': weighingDescEn,
+        'ta': weighingDescTa,
         'key': 'stage_4',
         'icon': Icons.scale_rounded,
-        'defaultRemark': 'Scale Verified: 45 Bags / 29.7 Qtl',
+        'defaultRemark': weighingRemark,
       },
       ProcurementStageType.qualityCheck: {
-        'en': 'Moisture level 14.2% verified. Grain categorized as Grade A.',
-        'ta': 'ஈரப்பதம் 14.2% சரிபார்க்கப்பட்டது. தரம் ஏ-வாக அங்கீகரிக்கப்பட்டது.',
+        'en': qualityDescEn,
+        'ta': qualityDescTa,
         'key': 'stage_5',
         'icon': Icons.verified_rounded,
-        'defaultRemark': 'Grade A FAQ Approved (14.2% Moisture)',
+        'defaultRemark': qualityRemark,
       },
       ProcurementStageType.accepted: {
         'en':
@@ -630,12 +721,9 @@ class ProcurementRepository extends ChangeNotifier {
 
       DateTime? timestamp = _stageTimestamps[s];
       if (timestamp == null) {
-        if (isCompleted) {
-          timestamp = DateTime.now().subtract(
-            Duration(minutes: (currentIndex - index) * 20 + 5),
-          );
-        } else if (isCurrent) {
+        if (isCompleted || isCurrent) {
           timestamp = DateTime.now();
+          _stageTimestamps[s] = timestamp;
         }
       }
 
@@ -778,7 +866,7 @@ class ProcurementRepository extends ChangeNotifier {
   Future<void> officerSetStage(ProcurementStageType stage, {String? remark}) async {
     if (_activeToken == null) return;
     _activeToken = _activeToken!.copyWith(currentStage: stage);
-    _stageTimestamps[stage] = DateTime.now();
+    _stageTimestamps[stage] ??= DateTime.now();
     if (remark != null && remark.isNotEmpty) {
       _stageRemarks[stage] = remark;
     }
@@ -788,9 +876,7 @@ class ProcurementRepository extends ChangeNotifier {
     for (int i = 0; i <= targetIdx; i++) {
       final s = stages[i];
       if (!_stageTimestamps.containsKey(s)) {
-        _stageTimestamps[s] = DateTime.now().subtract(
-          Duration(minutes: (targetIdx - i) * 15 + 2),
-        );
+        _stageTimestamps[s] = DateTime.now();
       }
     }
 
